@@ -3,12 +3,11 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { analyzeNote } from '../ai';
 import { detectPlatform } from '../platforms';
 import { HOSTABLE } from '../myRooms';
 import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
 import { addTasks, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
-import { getAiKey } from '../secret';
+import { itemsFromNote, NoteLines, parseWhen } from '../noteLines';
 import { PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
@@ -301,61 +300,62 @@ function CallCheck({ call, t, onWorked, onFailed }) {
   );
 }
 
-// After a call: what to do with your notes. Every choice keeps the note in their call history (plus anything to ask
-// about next time); "Create tasks" also finds to-dos, "Schedule next call" puts the next call in your calendar.
+// After a call: each line of your notes goes where you choose (follow up / schedule / note), and you can put the
+// next call in your calendar.
 const NEXT_DAYS = [{ label: 'Tomorrow', days: 1 }, { label: 'In 3 days', days: 3 }, { label: 'Next week', days: 7 }, { label: 'In 2 weeks', days: 14 }];
 const NEXT_TIMES = [{ label: '10 am', time: '10:00' }, { label: '1 pm', time: '13:00' }, { label: '6 pm', time: '18:00' }, { label: '7:30 pm', time: '19:30' }];
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-function AfterCallNotes({ call, t, onDone, onTasks }) {
-  const { settings, update } = useSettings();
-  const [note, setNote] = useState(call.note ?? '');
-  const [busy, setBusy] = useState('');       // which button is working
+function AfterCallNotes({ call, t, onDone }) {
+  const { update } = useSettings();
+  const [items, setItems] = useState(() => call.items ?? itemsFromNote(call.note));
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
-  const [kept, setKept] = useState('');       // confirmation once saved
+  const [kept, setKept] = useState('');
   const [scheduling, setScheduling] = useState(false);
   const [day, setDay] = useState(NEXT_DAYS[2]);
   const [time, setTime] = useState(NEXT_TIMES[3]);
   const recorded = useRef(false);
-  const first = call.person.name.split(' ')[0];
+  const person = call.person;
+  const first = person.name.split(' ')[0];
   const label = PLATFORMS[call.platform]?.label ?? 'call';
 
-  // read the note (AI if set up, else the simple built-in reader), keep it in their history once
-  const analyse = async () => {
-    let found = { tasks: [], follow_ups: [], facts: [] };
-    if (note.trim()) {
-      const apiKey = settings.aiProvider === 'claude' ? await getAiKey() : null;
-      found = await analyzeNote({ note, personName: call.person.name, ai: { provider: settings.aiProvider, apiKey },
-                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
-    }
-    if (!recorded.current) {                  // the call goes into their history once, whichever buttons you tap
-      recorded.current = true;
-      update(recordCall({ person: call.person, platform: call.platform, note, found }));
-    }
-    return found;
-  };
   const run = (key, fn) => async () => {
     setBusy(key); setError('');
-    try { await fn(); } catch (e) { setError(e.message || "Couldn't reach the AI. Check your connection and try again."); }
-    finally { setBusy(''); }
+    try { await fn(); } catch (e) { setError(e.message || 'Something went wrong. Try again.'); } finally { setBusy(''); }
   };
-  const justNotes = run('notes', async () => {
-    const found = await analyse();
-    const n = found.follow_ups.length;
-    setKept(n ? `Saved. Next time you call ${first}, Krypu will remind you to ask about ${n === 1 ? 'one thing' : `${n} things`}.`
-              : `Saved to ${first}'s call history.`);
-  });
-  const createTasks = run('tasks', async () => {
-    const found = await analyse();
-    if (found.tasks.length) onTasks(found.tasks, note);
-    else setKept(`No tasks in that note - it's saved to ${first}'s call history.`);
+
+  // Save: every line goes where you chose. Follow up → a task to ask about it (shows on their card before the next call);
+  // Schedule → a calendar event on the day/time in the line + a task; Note → their notes. The call goes into their history.
+  const save = run('save', async () => {
+    const follow = items.filter((x) => x.kind === 'followup');
+    const sched = items.filter((x) => x.kind === 'schedule').map((x) => ({ ...x, when: parseWhen(x.text) ?? parseWhen('tomorrow') }));
+    const notes = items.filter((x) => x.kind === 'note');
+    update((s) => {
+      let n = s;
+      if (!recorded.current) {
+        recorded.current = true;
+        n = recordCall({ person, platform: call.platform, note: items.map((x) => x.text).join('\n'),
+                         found: { follow_ups: [], facts: notes.map((x) => x.text) } })(n);
+      }
+      const tasks = [...follow.map((x) => ({ title: `Ask about: ${x.text}` })),
+                     ...sched.map((x) => ({ title: x.text, due_date: x.when.date, due_time: x.when.time }))];
+      if (tasks.length) n = addTasks({ person, tasks })(n);
+      if (notes.length) n = { ...n, notes: { ...n.notes, [person.id]: [n.notes[person.id], ...notes.map((x) => `• ${x.text}`)].filter(Boolean).join('\n') } };
+      return n;
+    });
+    for (const x of sched) {
+      await Linking.openURL(calendarUrl({ title: x.text, due_date: x.when.date, due_time: x.when.time, details: `From your call with ${person.name}` }));
+    }
+    const parts = [follow.length && `${follow.length} to follow up`, sched.length && `${sched.length} in your calendar`,
+                   notes.length && `${notes.length} added to ${first}'s notes`].filter(Boolean);
+    setKept(parts.length ? `Saved: ${parts.join(' · ')}.` : `Saved to ${first}'s call history.`);
+    setItems([]);
   });
   const schedule = run('next', async () => {
-    await analyse();
     const d = new Date(); d.setDate(d.getDate() + day.days);
-    const next = { title: `${label} with ${call.person.name}`, due_date: isoDay(d), due_time: time.time,
-                   details: note ? `Last time: ${note}` : '' };
-    update(addTasks({ person: call.person, tasks: [{ ...next, title: `Call ${first} (${label})` }] }));
+    const next = { title: `${label} with ${person.name}`, due_date: isoDay(d), due_time: time.time };
+    update(addTasks({ person, tasks: [{ ...next, title: `Call ${first} (${label})` }] }));
     await Linking.openURL(calendarUrl(next));
     setScheduling(false);
     setKept(`Next ${label} with ${first}: ${day.label.toLowerCase()} at ${time.label}. It's in your calendar and on your Tasks list.`);
@@ -377,19 +377,9 @@ function AfterCallNotes({ call, t, onDone, onTasks }) {
 
   return (
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sage }]}>
-      <Text style={[styles.name, { color: t.ink }]}>Your call with {call.person.name}</Text>
-      <TextInput value={note} onChangeText={setNote} multiline autoFocus={!note}
-        placeholder="Anything to remember? (tap the keyboard mic to talk)" placeholderTextColor={t.muted}
-        style={[styles.note, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />
-      {!!error && <Text style={[styles.sub, { color: t.clay }]}>{error}</Text>}
-      {kept ? (
-        <>
-          <Text style={[styles.sub, { color: t.sage, fontSize: 15 }]}>{kept}</Text>
-          <Pressable onPress={onDone} style={[ui.primary, { backgroundColor: t.sage }]}>
-            <Text style={[ui.primaryText, { color: t.paper }]}>OK</Text>
-          </Pressable>
-        </>
-      ) : scheduling ? (
+      <Text style={[styles.name, { color: t.ink }]}>Your call with {person.name}</Text>
+      {!!kept && <Text style={[styles.sub, { color: t.sage, fontSize: 15 }]}>{kept}</Text>}
+      {scheduling ? (
         <>
           <Text style={[ui.section, { color: t.muted, marginTop: 0 }]}>Next {label} with {first}</Text>
           <View style={ui.chips}>{NEXT_DAYS.map((x) => chip(day === x, x.label, () => setDay(x)))}</View>
@@ -401,14 +391,18 @@ function AfterCallNotes({ call, t, onDone, onTasks }) {
         </>
       ) : (
         <>
-          <View style={styles.rowGap}>
-            {button('notes', 'Just notes', justNotes, false)}
-            {button('tasks', 'Create tasks', createTasks, true)}
-          </View>
+          <NoteLines items={items} onChange={setItems} t={t} autoFocus={!items.length && !kept}
+            placeholder="Anything to remember? One thing per line - Enter adds it" />
+          {!!error && <Text style={[styles.sub, { color: t.clay }]}>{error}</Text>}
+          {items.length > 0 && (
+            <Pressable onPress={save} disabled={!!busy} style={[ui.primary, { backgroundColor: t.sage }]}>
+              {busy === 'save' ? <ActivityIndicator color={t.paper} /> : <Text style={[ui.primaryText, { color: t.paper }]}>Save</Text>}
+            </Pressable>
+          )}
           <View style={styles.rowGap}>
             {button('sched', 'Schedule next call', () => setScheduling(true), false)}
             <Pressable onPress={onDone} disabled={!!busy} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
-              <Text style={[styles.sub, { color: t.muted, fontWeight: '600', textAlign: 'center' }]}>Skip</Text>
+              <Text style={[styles.sub, { color: t.muted, fontWeight: '600', textAlign: 'center' }]}>{kept ? 'Done' : 'Skip'}</Text>
             </Pressable>
           </View>
         </>
@@ -636,11 +630,13 @@ export default function Home() {
     if (!params.after) return;
     const person = contacts.people.find((p) => p.id === params.after);
     if (!person) return;
-    const info = { person, platform: params.platform, mine: false, note: params.note };
+    let items = null;
+    try { items = params.items ? JSON.parse(params.items) : null; } catch {}
+    const info = { person, platform: params.platform, mine: false, note: params.note, items };
     if (params.failed) { setBroken((b) => new Set(b).add(`${person.id}:${params.platform}`)); setFix(info); }
     else setNotesFor(info);
     // clear the one-time params after the navigator has mounted (a cold start straight to Home would crash otherwise)
-    setTimeout(() => router.setParams({ after: undefined, note: undefined, failed: undefined, platform: undefined }), 0);
+    setTimeout(() => router.setParams({ after: undefined, note: undefined, items: undefined, failed: undefined, platform: undefined }), 0);
   }, [params.after, contacts.people.length]);
   const [copied, setCopied] = useState(null);      // {url, platform} found on the clipboard, not saved yet
   const seenClip = useRef('');

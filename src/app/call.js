@@ -3,11 +3,12 @@
 // box. End call → back home to the after-call notes (just notes / tasks / schedule the next call).
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Keyboard, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useContacts } from '../contacts';
 import { openTheirs } from '../launch';
+import { NoteLines } from '../noteLines';
 import { PLATFORMS } from '../platforms';
 import { useSettings } from '../settings';
 import { useTheme } from '../theme';
@@ -45,7 +46,7 @@ export default function Call() {
   const now = useNow();
   const person = contacts.people.find((p) => p.id === id);
   const [allowed, setAllowed] = useState(Platform.OS !== 'android');
-  const [callNote, setCallNote] = useState('');
+  const [items, setItems] = useState([]);     // your notes, one line each, with follow up / schedule / note
   const [error, setError] = useState('');
   const [kb, setKb] = useState(0);            // keyboard height: the video shrinks so your notes stay above it
 
@@ -71,7 +72,8 @@ export default function Call() {
   const first = person.name.split(' ')[0];
   const done = (failed) => {
     Keyboard.dismiss();
-    router.replace({ pathname: '/', params: { after: person.id, platform, note: callNote, failed: failed ? '1' : '' } });
+    router.replace({ pathname: '/', params: { after: person.id, platform, note: items.map((x) => x.text).join('\n'),
+                                              items: JSON.stringify(items), failed: failed ? '1' : '' } });
   };
 
   return (
@@ -104,8 +106,10 @@ export default function Call() {
             <Text style={[styles.sub, { color: t.clay }]}>Tip: add your name in Settings and Krypu will fill it in on FaceTime.</Text>
           </Pressable>
         )}
-        <TextInput value={callNote} onChangeText={setCallNote} multiline placeholder={`Notes from this call with ${first}…`}
-          placeholderTextColor={t.muted} style={[styles.note, { backgroundColor: t.card, borderColor: t.line, color: t.ink }]} />
+        <ScrollView style={styles.flex} contentContainerStyle={{ paddingBottom: 4 }} keyboardShouldPersistTaps="handled"
+          ref={(r) => { if (r) setTimeout(() => r.scrollToEnd({ animated: true }), 50); }}>
+          <NoteLines items={items} onChange={setItems} t={t} compact placeholder={`Note from this call with ${first} - Enter adds it`} />
+        </ScrollView>
         {!!settings.notes[person.id] && !kb && (
           <Text style={[styles.sub, { color: t.muted }]} numberOfLines={2}>Your notes: {settings.notes[person.id]}</Text>
         )}
