@@ -5,9 +5,9 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
 const DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-const DAY_RE = /\b(sun|mon|tue|tues|wed|thu|thur|thurs|fri|sat)(day)?\b/i;
+const DAY_RE = /\b(sun(?:day)?|mon(?:day)?|tue(?:s|sday)?|wed(?:nesday)?|thu(?:r|rs|rsday)?|fri(?:day)?|sat(?:urday)?)\b/i;
 const TIME_RE = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\bat (\d{1,2})(?::(\d{2}))?\b/i;
-const NEWS_RE = /\b(sick|ill|flu|covid|cold|hospital|surgery|doctor|dentist|appointment|interview|exam|test|trip|travel|moving|pregnan|baby|hurt|broke|injur|funeral|job|surgery)/i;
+const NEWS_RE = /\b(sick|ill|flu|covid|cold|hospital|surgery|doctor|dentist|appointment|interview|exam|test|trip|travel|moving|pregnan|baby|hurt|broke|injur|funeral|job)/i;
 
 // Next date for a line like "saturday", "tomorrow", "next week"; null if it names no day.
 export function parseWhen(text, now = new Date()) {

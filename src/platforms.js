@@ -62,3 +62,28 @@ export function newJitsiRoom() {
 export function detectPlatform(url) {
   return PLATFORM_ORDER.find((key) => PLATFORMS[key].match(url)) ?? null;
 }
+
+// Platforms whose calls run inside Krypu (call screen: video on top, notes below), because they have a web version
+// that works in the in-app browser. The rest open their own app; notes come after the call.
+export const IN_APP = ['facetime', 'jitsi', 'zoom'];
+
+// The web address to load in the call screen for a link, or null if it can't run in-app. Your display name goes into the
+// link where the platform supports it (FaceTime has no such option; the call screen types it into the page instead).
+export function inAppUrl(platform, url, name = '') {
+  if (!url) return null;
+  if (platform === 'facetime') return url;
+  // Jitsi on a phone browser pushes its app unless deep linking is off; the name is a config option in the #fragment
+  if (platform === 'jitsi') {
+    const opts = ['config.disableDeepLinking=true', name && `userInfo.displayName=${encodeURIComponent(JSON.stringify(name))}`].filter(Boolean);
+    return `${url}${url.includes('#') ? '&' : '#'}${opts.join('&')}`;
+  }
+  // Zoom meeting links → Zoom's web client (join from the browser), passcode kept, name as ?uname=
+  if (platform === 'zoom') {
+    const m = url.match(/zoom\.us\/j\/(\d+)(\?[^#]*)?/i);
+    if (!m) return null;
+    const q = new URLSearchParams((m[2] ?? '').slice(1));
+    if (name) q.set('uname', name);
+    return `https://app.zoom.us/wc/join/${m[1]}${q.toString() ? `?${q}` : ''}`;
+  }
+  return null;
+}

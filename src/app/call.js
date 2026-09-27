@@ -1,15 +1,15 @@
-// In a FaceTime call, inside Krypu: FaceTime (its web version) runs in the top part of the screen and your notes are
-// underneath with the keyboard, so you can type while you talk. Krypu types your name into FaceTime's "who's joining"
-// box. End call → back home to the after-call notes (just notes / tasks / schedule the next call).
+// A call inside Krypu (FaceTime, Jitsi, Zoom - their web versions): the call runs in the top part of the screen and your
+// notes are underneath with the keyboard, one line each (follow up / schedule / note). Krypu types your display name
+// into the join page. End call (or hanging up in the call itself) → back home to the after-call notes.
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Keyboard, PermissionsAndroid, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useContacts } from '../contacts';
-import { openTheirs } from '../launch';
+import { openRoom, openTheirs } from '../launch';
 import { NoteLines } from '../noteLines';
-import { PLATFORMS } from '../platforms';
+import { inAppUrl, PLATFORMS } from '../platforms';
 import { useSettings } from '../settings';
 import { useTheme } from '../theme';
 import { guessZone, localTime, useNow, zoneName } from '../timezones';
@@ -25,8 +25,12 @@ const pageScript = (name) => `(function () {
   if (window.__krypu) return true; window.__krypu = true;
   var name = ${JSON.stringify(name)}, inCall = false, gone = 0, told = false;
   setInterval(function () {
-    var el = document.querySelector('input[type="text"], input:not([type])');
-    if (name && el && !el.value && document.activeElement !== el) {
+    // only a box that asks for a name (never a passcode or meeting ID)
+    var el = Array.prototype.find.call(document.querySelectorAll('input[type="text"], input:not([type])'), function (i) {
+      return /name/i.test([i.placeholder, i.getAttribute('aria-label'), i.name, i.id, i.autocomplete].join(' '));
+    });
+    if (name && el && !el.value && !el.dataset.krypu) {
+      el.dataset.krypu = '1';                 // once per box: if you clear it, it stays cleared
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, name);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
@@ -40,7 +44,7 @@ const pageScript = (name) => `(function () {
 export default function Call() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { id, platform = 'facetime', testUrl } = useLocalSearchParams();
+  const { id, platform = 'facetime', testUrl, url: roomUrl } = useLocalSearchParams();
   const { settings } = useSettings();
   const contacts = useContacts();
   const now = useNow();
@@ -66,7 +70,9 @@ export default function Call() {
   }, []);
 
   // dev builds only: ?testUrl= opens any page instead of the call, to test the layout without calling anyone
-  const url = (__DEV__ && testUrl) || person?.links?.[platform];
+  // your own room (url param) or their saved link, turned into the platform's web version
+  const link = roomUrl || person?.links?.[platform];
+  const url = (__DEV__ && testUrl) || inAppUrl(platform, link, (settings?.myName ?? '').trim());
   if (!settings || !person) return <View style={[styles.root, { backgroundColor: t.paper }]} />;
   const zone = settings.tz[person.id] ?? guessZone(person.phone);
   const first = person.name.split(' ')[0];
@@ -114,8 +120,8 @@ export default function Call() {
           <Text style={[styles.sub, { color: t.muted }]} numberOfLines={2}>Your notes: {settings.notes[person.id]}</Text>
         )}
         {!kb && <View style={styles.row}>
-          <Pressable onPress={() => openTheirs(person, platform)} style={styles.link}>
-            <Text style={[styles.sub, { color: t.muted }]}>Open in Chrome instead</Text>
+          <Pressable onPress={() => (roomUrl ? openRoom(roomUrl) : openTheirs(person, platform))} style={styles.link}>
+            <Text style={[styles.sub, { color: t.muted }]}>{platform === 'facetime' ? 'Open in Chrome instead' : `Open in ${PLATFORMS[platform].label} app`}</Text>
           </Pressable>
           <Pressable onPress={() => done(true)} style={styles.link}>
             <Text style={[styles.sub, { color: t.clay, fontWeight: '600' }]}>Link didn't work</Text>

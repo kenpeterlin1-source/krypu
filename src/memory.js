@@ -51,3 +51,12 @@ export function personMemory(settings, personId) {
 export function shortDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
+
+// "Sat, Oct 3" or "Sat, Oct 3, 7 pm" for a task's due date/time; '' if none.
+export function dueLabel(task) {
+  if (!task.due_date) return '';
+  const day = new Date(`${task.due_date}T12:00:00`).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  if (!task.due_time) return day;
+  const [h, m] = task.due_time.split(':').map(Number);
+  return `${day}, ${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+}

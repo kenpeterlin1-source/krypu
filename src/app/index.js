@@ -6,9 +6,9 @@ import { ActivityIndicator, Alert, AppState, Linking, Modal, Platform, Pressable
 import { detectPlatform } from '../platforms';
 import { HOSTABLE } from '../myRooms';
 import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
-import { addTasks, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
+import { addTasks, dueLabel, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { itemsFromNote, NoteLines, parseWhen } from '../noteLines';
-import { PLATFORMS } from '../platforms';
+import { IN_APP, PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
 import { collectNewLinks } from '../messages';
@@ -177,7 +177,7 @@ function BeforeYouCall({ person, t }) {
         <Pressable key={task.id} onPress={() => update(toggleTask(task.id))} style={styles.memRow}>
           <View style={[styles.smallCheck, { borderColor: t.clay }]} />
           <Text style={[styles.sub, styles.flex, { color: t.ink, fontSize: 15 }]}>
-            {task.title}{task.due_date ? `  ·  ${task.due_date}` : ''}
+            {task.title}{task.due_date ? `  ·  ${dueLabel(task)}` : ''}
           </Text>
         </Pressable>
       ))}
@@ -698,14 +698,16 @@ export default function Home() {
     const person = selected; setSelected(null);
     if (platform === 'phone') return run({ person, platform: 'phone', mine: false }, [() => callPhone(person)]);
     if (platform === 'whatsapp-voice') return run({ person, platform: 'whatsapp', mine: false }, [() => openTheirs(person, 'whatsapp')]);
+    // calls that can run inside Krypu get the call screen (video on top, notes below); the rest open their own app
+    const inApp = Platform.OS === 'android' && IN_APP.includes(platform);
     if (mine) {
       const url = settings.myRooms[platform];
-      return run({ person, platform, mine }, [() => textTo(person, inviteText(platform, url)), () => openRoom(url)]);
+      const openMine = inApp ? () => router.push({ pathname: '/call', params: { id: person.id, platform, url } }) : () => openRoom(url);
+      return run({ person, platform, mine, screen: inApp }, [() => textTo(person, inviteText(platform, url)), openMine]);
     }
     // FaceTime links don't ring the iPhone - text them first so they know to let you in (not again if you just did)
     // FaceTime with Chrome available: the in-call screen (notes on top, call docked below) takes over
-    // FaceTime runs inside Krypu (call screen: video on top, your notes below) on Android; the web preview opens a tab
-    const split = platform === 'facetime' && Platform.OS === 'android';
+    const split = inApp && !!person.links?.[platform];
     const open = split ? () => router.push({ pathname: '/call', params: { id: person.id, platform } }) : () => openTheirs(person, platform);
     const steps = platform === 'facetime' && person.phone && !textedRecently(person)
       ? [() => textTo(person, nudgeText('facetime')), open]

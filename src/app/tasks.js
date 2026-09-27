@@ -1,7 +1,7 @@
 // Tasks: what people asked for on your calls, grouped by person. Tick to complete; the latest done ones stay below.
 import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { shortDate, toggleTask } from '../memory';
+import { dueLabel, shortDate, toggleTask } from '../memory';
 import { useSettings } from '../settings';
 import { useTheme } from '../theme';
 import { Screen, ui } from '../ui';
@@ -24,7 +24,7 @@ export default function Tasks() {
       <View style={styles.body}>
         <Text style={[styles.title, { color: task.done ? t.muted : t.ink, textDecorationLine: task.done ? 'line-through' : 'none' }]}>{task.title}</Text>
         <Text style={[styles.sub, { color: t.muted }]}>
-          {[task.done ? task.personName : null, task.due_date, task.due_time, `from ${shortDate(task.createdAt)}`].filter(Boolean).join(' · ')}
+          {[task.done ? task.personName : null, dueLabel(task), `from ${shortDate(task.createdAt)}`].filter(Boolean).join(' · ')}
         </Text>
       </View>
     </Pressable>
