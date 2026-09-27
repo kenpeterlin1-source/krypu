@@ -366,3 +366,22 @@ is only worth it if the three Apple users won't move off FaceTime — which is u
   - Domains available on 2026-09-27: contactsummit.app (preferred), getcontactsummit.com, contactsummitapp.com,
     contactsummit.net. Ken buys one at Cloudflare.
   - Trademark: web search found no "Contact Summit" mark. Ken to confirm on tmsearch.uspto.gov before launch.
+- 2026-09-27: **0.1.6 installed on Ken's phone via adb (not published to GitHub yet).**
+  - **In-app calls** (`src/app/call.js`, WebView): video on top, notes below with the keyboard, End call.
+    - FaceTime, Jitsi (`#config.disableDeepLinking=true` + `userInfo.displayName`) and Zoom (web client
+      `app.zoom.us/wc/join/<id>?pwd&uname`).
+    - The display name defaults to "Ken" (Settings → Display name). FaceTime's name box is filled by an injected script.
+    - Hanging up inside the call page is detected: video gone for ~3 s → after-call notes.
+  - **Notes line by line** (`src/noteLines.js`): Enter adds a line with Follow up / Schedule / Note.
+    - Save → follow-ups become "Ask about: …" tasks; schedule opens a Google Calendar event on the day/time in the
+      line and adds a task; notes go on the person's notes.
+    - Meet / Teams / Slack / WhatsApp / phone open their own apps; the same notes come after "Did it work? → Yes".
+  - Tested on the phone:
+    - FaceTime join page + name fill + keyboard layout + a real call (Ken)
+    - Jitsi join + name in link + notes + End call → Save
+    - Calendar draft on Sat Oct 3 (discarded)
+    - Before you call + Tasks screen
+    - Zoom web client loads (fake meeting id)
+  - **Jitsi caveat:** meet.jit.si now requires the first person to log in as moderator (Google/GitHub). Ken's own
+    Jitsi room needs that login, or switch to another Jitsi server.
+  - Not yet tested: a real Zoom meeting, a full FaceTime call with the new notes, the Meet/Teams/WhatsApp return flow.
