@@ -354,3 +354,9 @@ is only worth it if the three Apple users won't move off FaceTime — which is u
     Faceli, Kallo/Kalla.
   - The rename touches the app name, package id, GitHub repo, update checks (`releasesRepo`) and the web page, so do it
     once.
+- 2026-09-27: **Name decided: Contact Summit.** Rename happens **at the end, once the prototype works**.
+  - Keep the Android app id `com.peterlin.krypu`, so updates install over the current app and keep its data. Only the
+    visible name, repo, web page and `releasesRepo` change.
+  - Domains available on 2026-09-27: contactsummit.app (preferred), getcontactsummit.com, contactsummitapp.com,
+    contactsummit.net. Ken buys one at Cloudflare.
+  - Trademark: web search found no "Contact Summit" mark. Ken to confirm on tmsearch.uspto.gov before launch.
