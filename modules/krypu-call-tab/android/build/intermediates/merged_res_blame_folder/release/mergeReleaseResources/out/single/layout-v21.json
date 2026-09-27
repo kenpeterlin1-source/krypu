@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout-v21/notification_action.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout-v21/notification_action.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout-v21/notification_template_icon_group.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout-v21/notification_template_icon_group.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout-v21/notification_template_custom_big.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout-v21/notification_template_custom_big.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout-v21/notification_action_tombstone.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout-v21/notification_action_tombstone.xml"
+    }
+]

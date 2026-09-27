@@ -20,6 +20,8 @@ export const DEFAULTS = {
   // where tasks were saved last time - becomes the default button ('google' | 'calendar' | 'email' | 'text')
   taskTarget: null,
   myEmail: '',
+  // your name as the other person sees it on a FaceTime web call - Krypu types it into the join page for you
+  myName: '',
   // everything Krypu remembers about calls, kept on the phone:
   //   tasks: [{id, personId, personName, title, due_date, due_time, done, createdAt}]
   //   calls: {personId: [{id, at, platform, note, followUps: [{text, done}], facts: [..]}]}  (newest first)

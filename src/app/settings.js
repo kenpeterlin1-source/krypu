@@ -166,6 +166,14 @@ export default function Settings() {
           style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
       </View>
 
+      <Text style={[ui.section, { color: t.muted }]}>Your name on calls</Text>
+      <View style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
+        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>FaceTime asks who's joining. Krypu fills this in for you.</Text>
+        <TextInput value={settings.myName} onChangeText={(v) => update({ myName: v })} autoCapitalize="words"
+          placeholder="Your first name" placeholderTextColor={t.muted}
+          style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
+      </View>
+
       {Object.keys(settings.hidden).length > 0 && (
         <>
           <Text style={[ui.section, { color: t.muted }]}>Hidden people</Text>

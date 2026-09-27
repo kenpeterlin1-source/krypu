@@ -1,0 +1,30 @@
+[
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/ime_secondary_split_test_activity.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout/ime_secondary_split_test_activity.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/browser_actions_context_menu_page.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-browser-1.9.0-8:/layout/browser_actions_context_menu_page.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/custom_dialog.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout/custom_dialog.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/ime_base_split_test_activity.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout/ime_base_split_test_activity.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/notification_template_part_chronometer.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout/notification_template_part_chronometer.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/browser_actions_context_menu_row.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-browser-1.9.0-8:/layout/browser_actions_context_menu_row.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/layout/notification_template_part_time.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/layout/notification_template_part_time.xml"
+    }
+]

@@ -1,0 +1,82 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/values-ta/values-ta.xml",
+            "map": [
+                {
+                    "source": "/Users/kpeterlin/.gradle/caches/9.3.1/transforms/a70803577aafff8e5094893bc7cfe843/transformed/browser-1.9.0/res/values-ta/values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,172,274,381",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "167,269,376,480"
+                    },
+                    "to": {
+                        "startLines": "9,10,11,12",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "801,918,1020,1127",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "913,1015,1122,1226"
+                    }
+                },
+                {
+                    "source": "/Users/kpeterlin/.gradle/caches/9.3.1/transforms/3d3beef35d3564ffd3e90af29befcb5c/transformed/core-1.13.0/res/values-ta/values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,558,673,801",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "146,249,348,446,553,668,796,897"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,13",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,558,673,1231",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "146,249,348,446,553,668,796,1327"
+                    }
+                }
+            ]
+        },
+        {
+            "outputFile": "com.peterlin.krypu.calltab.krypu-call-tab-mergeReleaseResources-14:/values-ta/values-ta.xml",
+            "map": [
+                {
+                    "source": "/Users/kpeterlin/.gradle/caches/9.3.1/transforms/a70803577aafff8e5094893bc7cfe843/transformed/browser-1.9.0/res/values-ta/values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,172,274,381",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "167,269,376,480"
+                    },
+                    "to": {
+                        "startLines": "9,10,11,12",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "801,918,1020,1127",
+                        "endColumns": "116,101,106,103",
+                        "endOffsets": "913,1015,1122,1226"
+                    }
+                },
+                {
+                    "source": "/Users/kpeterlin/.gradle/caches/9.3.1/transforms/3d3beef35d3564ffd3e90af29befcb5c/transformed/core-1.13.0/res/values-ta/values-ta.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,558,673,801",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "146,249,348,446,553,668,796,897"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,13",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,151,254,353,451,558,673,1231",
+                        "endColumns": "95,102,98,97,106,114,127,100",
+                        "endOffsets": "146,249,348,446,553,668,796,1327"
+                    }
+                }
+            ]
+        }
+    ]
+}

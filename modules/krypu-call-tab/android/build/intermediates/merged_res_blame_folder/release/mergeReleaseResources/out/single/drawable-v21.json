@@ -1,0 +1,6 @@
+[
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/drawable-v21/notification_action_background.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/drawable-v21/notification_action_background.xml"
+    }
+]

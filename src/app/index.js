@@ -1,13 +1,12 @@
 // Home: your contacts, filtered to people you can video-call on the apps you use.
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { canSplit } from '../callTab';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, AppState, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { analyzeNote } from '../ai';
 import { detectPlatform } from '../platforms';
 import { HOSTABLE } from '../myRooms';
-import { saveTasks, TASK_TARGETS } from '../saveTasks';
+import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
 import { addTasks, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { getAiKey } from '../secret';
 import { PLATFORMS } from '../platforms';
@@ -302,40 +301,85 @@ function CallCheck({ call, t, onWorked, onFailed }) {
   );
 }
 
-// After a call that worked: "Anything to remember?" - type or use the keyboard's mic to dictate.
+// After a call: what to do with your notes. Every choice keeps the note in their call history (plus anything to ask
+// about next time); "Create tasks" also finds to-dos, "Schedule next call" puts the next call in your calendar.
+const NEXT_DAYS = [{ label: 'Tomorrow', days: 1 }, { label: 'In 3 days', days: 3 }, { label: 'Next week', days: 7 }, { label: 'In 2 weeks', days: 14 }];
+const NEXT_TIMES = [{ label: '10 am', time: '10:00' }, { label: '1 pm', time: '13:00' }, { label: '6 pm', time: '18:00' }, { label: '7:30 pm', time: '19:30' }];
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 function AfterCallNotes({ call, t, onDone, onTasks }) {
   const { settings, update } = useSettings();
   const [note, setNote] = useState(call.note ?? '');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState('');       // which button is working
   const [error, setError] = useState('');
-  const [kept, setKept] = useState('');       // shown when the note had nothing to do, only things to remember
+  const [kept, setKept] = useState('');       // confirmation once saved
+  const [scheduling, setScheduling] = useState(false);
+  const [day, setDay] = useState(NEXT_DAYS[2]);
+  const [time, setTime] = useState(NEXT_TIMES[3]);
   const recorded = useRef(false);
   const first = call.person.name.split(' ')[0];
-  const find = async () => {
-    setBusy(true); setError('');
-    try {
+  const label = PLATFORMS[call.platform]?.label ?? 'call';
+
+  // read the note (AI if set up, else the simple built-in reader), keep it in their history once
+  const analyse = async () => {
+    let found = { tasks: [], follow_ups: [], facts: [] };
+    if (note.trim()) {
       const apiKey = settings.aiProvider === 'claude' ? await getAiKey() : null;
-      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const found = await analyzeNote({ note, personName: call.person.name, ai: { provider: settings.aiProvider, apiKey }, timeZone: zone });
-      if (!recorded.current) {                    // the call goes into their history once, even if you tap again
-        recorded.current = true;
-        update(recordCall({ person: call.person, platform: call.platform, note, found }));
-      }
-      if (found.tasks.length) onTasks(found.tasks, note);
-      else {
-        const n = found.follow_ups.length;
-        setKept(n ? `Saved. Next time you call ${first}, Krypu will remind you to ask about ${n === 1 ? 'one thing' : `${n} things`}.`
-                  : `Saved to ${first}'s call history.`);
-      }
-    } catch (e) {
-      setError(e.message || "Couldn't reach the AI. Check your connection and try again.");
-    } finally { setBusy(false); }
+      found = await analyzeNote({ note, personName: call.person.name, ai: { provider: settings.aiProvider, apiKey },
+                                  timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
+    }
+    if (!recorded.current) {                  // the call goes into their history once, whichever buttons you tap
+      recorded.current = true;
+      update(recordCall({ person: call.person, platform: call.platform, note, found }));
+    }
+    return found;
   };
+  const run = (key, fn) => async () => {
+    setBusy(key); setError('');
+    try { await fn(); } catch (e) { setError(e.message || "Couldn't reach the AI. Check your connection and try again."); }
+    finally { setBusy(''); }
+  };
+  const justNotes = run('notes', async () => {
+    const found = await analyse();
+    const n = found.follow_ups.length;
+    setKept(n ? `Saved. Next time you call ${first}, Krypu will remind you to ask about ${n === 1 ? 'one thing' : `${n} things`}.`
+              : `Saved to ${first}'s call history.`);
+  });
+  const createTasks = run('tasks', async () => {
+    const found = await analyse();
+    if (found.tasks.length) onTasks(found.tasks, note);
+    else setKept(`No tasks in that note - it's saved to ${first}'s call history.`);
+  });
+  const schedule = run('next', async () => {
+    await analyse();
+    const d = new Date(); d.setDate(d.getDate() + day.days);
+    const next = { title: `${label} with ${call.person.name}`, due_date: isoDay(d), due_time: time.time,
+                   details: note ? `Last time: ${note}` : '' };
+    update(addTasks({ person: call.person, tasks: [{ ...next, title: `Call ${first} (${label})` }] }));
+    await Linking.openURL(calendarUrl(next));
+    setScheduling(false);
+    setKept(`Next ${label} with ${first}: ${day.label.toLowerCase()} at ${time.label}. It's in your calendar and on your Tasks list.`);
+  });
+
+  const chip = (on, text, onPress) => (
+    <Pressable key={text} onPress={onPress}
+      style={[ui.chip, { paddingVertical: 7, paddingHorizontal: 11, borderWidth: 1, borderColor: on ? t.sage : t.line, backgroundColor: on ? t.sageSoft : t.paper }]}>
+      <Text style={[ui.chipText, { color: on ? t.sage : t.muted }]}>{text}</Text>
+    </Pressable>
+  );
+  const button = (key, text, onPress, filled) => (
+    <Pressable key={key} onPress={onPress} disabled={!!busy}
+      style={[styles.half, filled ? { backgroundColor: t.sage } : { backgroundColor: t.paper, borderWidth: 1, borderColor: t.sage }]}>
+      {busy === key ? <ActivityIndicator color={filled ? t.paper : t.sage} />
+        : <Text style={[styles.sub, { color: filled ? t.paper : t.sage, fontWeight: '700', textAlign: 'center' }]}>{text}</Text>}
+    </Pressable>
+  );
+
   return (
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sage }]}>
-      <Text style={[styles.name, { color: t.ink }]}>Anything to remember from your call with {call.person.name}?</Text>
-      <TextInput value={note} onChangeText={setNote} multiline autoFocus
-        placeholder="Mom wants help with her printer on Saturday…  (tap the keyboard mic to talk)" placeholderTextColor={t.muted}
+      <Text style={[styles.name, { color: t.ink }]}>Your call with {call.person.name}</Text>
+      <TextInput value={note} onChangeText={setNote} multiline autoFocus={!note}
+        placeholder="Anything to remember? (tap the keyboard mic to talk)" placeholderTextColor={t.muted}
         style={[styles.note, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />
       {!!error && <Text style={[styles.sub, { color: t.clay }]}>{error}</Text>}
       {kept ? (
@@ -345,15 +389,29 @@ function AfterCallNotes({ call, t, onDone, onTasks }) {
             <Text style={[ui.primaryText, { color: t.paper }]}>OK</Text>
           </Pressable>
         </>
+      ) : scheduling ? (
+        <>
+          <Text style={[ui.section, { color: t.muted, marginTop: 0 }]}>Next {label} with {first}</Text>
+          <View style={ui.chips}>{NEXT_DAYS.map((x) => chip(day === x, x.label, () => setDay(x)))}</View>
+          <View style={ui.chips}>{NEXT_TIMES.map((x) => chip(time === x, x.label, () => setTime(x)))}</View>
+          <View style={styles.rowGap}>
+            {button('back', 'Back', () => setScheduling(false), false)}
+            {button('next', 'Add to calendar', schedule, true)}
+          </View>
+        </>
       ) : (
-        <View style={styles.rowGap}>
-          <Pressable onPress={onDone} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
-            <Text style={[ui.primaryText, { color: t.muted }]}>Nothing</Text>
-          </Pressable>
-          <Pressable onPress={find} disabled={!note.trim() || busy} style={[styles.half, { backgroundColor: note.trim() ? t.sage : t.line }]}>
-            {busy ? <ActivityIndicator color={t.paper} /> : <Text style={[ui.primaryText, { color: note.trim() ? t.paper : t.muted }]}>Save note</Text>}
-          </Pressable>
-        </View>
+        <>
+          <View style={styles.rowGap}>
+            {button('notes', 'Just notes', justNotes, false)}
+            {button('tasks', 'Create tasks', createTasks, true)}
+          </View>
+          <View style={styles.rowGap}>
+            {button('sched', 'Schedule next call', () => setScheduling(true), false)}
+            <Pressable onPress={onDone} disabled={!!busy} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
+              <Text style={[styles.sub, { color: t.muted, fontWeight: '600', textAlign: 'center' }]}>Skip</Text>
+            </Pressable>
+          </View>
+        </>
       )}
     </View>
   );
@@ -650,7 +708,8 @@ export default function Home() {
     }
     // FaceTime links don't ring the iPhone - text them first so they know to let you in (not again if you just did)
     // FaceTime with Chrome available: the in-call screen (notes on top, call docked below) takes over
-    const split = platform === 'facetime' && canSplit();
+    // FaceTime runs inside Krypu (call screen: video on top, your notes below) on Android; the web preview opens a tab
+    const split = platform === 'facetime' && Platform.OS === 'android';
     const open = split ? () => router.push({ pathname: '/call', params: { id: person.id, platform } }) : () => openTheirs(person, platform);
     const steps = platform === 'facetime' && person.phone && !textedRecently(person)
       ? [() => textTo(person, nudgeText('facetime')), open]

@@ -1,0 +1,18 @@
+[
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/drawable/notification_tile_bg.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/drawable/notification_tile_bg.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/drawable/notification_icon_background.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/drawable/notification_icon_background.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/drawable/notification_bg_low.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/drawable/notification_bg_low.xml"
+    },
+    {
+        "merged": "com.peterlin.krypu.calltab.krypu-call-tab-release-16:/drawable/notification_bg.xml",
+        "source": "com.peterlin.krypu.calltab.krypu-call-tab-core-1.13.0-7:/drawable/notification_bg.xml"
+    }
+]
