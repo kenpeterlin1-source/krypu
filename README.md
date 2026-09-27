@@ -225,7 +225,13 @@ you ("Is your daughter Ava feeling better?").
 - **Done:** `src/ai.js` `analyzeNote()` now returns `{tasks, follow_ups, facts}` (Claude prompt + zod schema updated;
   no-AI fallback turns news like "sick/interview/trip" into follow-ups). `src/memory.js` has the data helpers
   (`recordCall`, `addTasks`, `toggleTask`, `markAsked`, `personMemory`). `settings.js` has `tasks: []`, `calls: {}`.
-- **To do:**
+- **DONE 2026-09-27 (web-tested, not yet on the phone):**
+  - "Save note" always records the call (note + follow-ups + facts) in the person's history, even with no tasks.
+  - Tasks go on Krypu's own list wherever else you send them, plus a "Keep in Krypu only" option.
+  - **Before you call** on the person's sheet: things to ask about (with Asked ✓), facts, open tasks, last 3 calls.
+  - New **Tasks** screen (✓ n button beside the gear).
+  - Also fixed: opening Home straight from a link with after-call params crashed (setParams before the navigator mounted).
+- **Was the to-do list:**
   1. After "Find tasks": call `recordCall()` with the note + follow-ups + facts (also when there are no tasks) and
      `addTasks()` for ticked tasks - always, whichever external target is chosen; add a "Keep in Krypu only" option.
   2. Person sheet, top: **Before you call** - open follow-ups ("Ask if Ava is feeling better", with an "Asked ✓" to

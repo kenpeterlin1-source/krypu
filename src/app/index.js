@@ -8,6 +8,7 @@ import { analyzeNote } from '../ai';
 import { detectPlatform } from '../platforms';
 import { HOSTABLE } from '../myRooms';
 import { saveTasks, TASK_TARGETS } from '../saveTasks';
+import { addTasks, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { getAiKey } from '../secret';
 import { PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
@@ -148,6 +149,49 @@ function Option({ t, tone, title, how, dashed, onPress }) {
   );
 }
 
+// What Krypu remembers about someone, shown at the top of their sheet: things to ask about, facts, open tasks, calls.
+function BeforeYouCall({ person, t }) {
+  const { settings, update } = useSettings();
+  const m = personMemory(settings, person.id);
+  if (!m.followUps.length && !m.facts.length && !m.tasks.length && !m.calls.length) return null;
+  return (
+    <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sage }]}>
+      <Text style={[ui.section, { color: t.sage, marginTop: 0 }]}>Before you call</Text>
+      {m.followUps.map((f) => (
+        <View key={`${f.callId}-${f.index}`} style={styles.memRow}>
+          <Text style={[styles.sub, styles.flex, { color: t.ink, fontSize: 15, lineHeight: 21 }]}>{f.text}</Text>
+          <Pressable onPress={() => update(markAsked(person.id, f.callId, f.index))} hitSlop={8}
+            style={[styles.askedBtn, { borderColor: t.sage }]} accessibilityLabel={`Mark asked: ${f.text}`}>
+            <Text style={{ color: t.sage, fontWeight: '700', fontSize: 13 }}>Asked ✓</Text>
+          </Pressable>
+        </View>
+      ))}
+      {m.facts.length > 0 && (
+        <View style={ui.chips}>
+          {m.facts.map((f) => (
+            <View key={f} style={[ui.chip, { paddingVertical: 6, paddingHorizontal: 10, backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
+              <Text style={[ui.chipText, { color: t.ink }]}>{f}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+      {m.tasks.map((task) => (
+        <Pressable key={task.id} onPress={() => update(toggleTask(task.id))} style={styles.memRow}>
+          <View style={[styles.smallCheck, { borderColor: t.clay }]} />
+          <Text style={[styles.sub, styles.flex, { color: t.ink, fontSize: 15 }]}>
+            {task.title}{task.due_date ? `  ·  ${task.due_date}` : ''}
+          </Text>
+        </Pressable>
+      ))}
+      {m.calls.slice(0, 3).map((c) => (
+        <Text key={c.id} style={[styles.sub, { color: t.muted }]} numberOfLines={2}>
+          {shortDate(c.at)} · {PLATFORMS[c.platform]?.label ?? 'Call'}{c.note ? ` · ${c.note}` : ''}
+        </Text>
+      ))}
+    </View>
+  );
+}
+
 function PlatformSheet({ person, rooms, t, onClose, onLaunch, onAsk, onLinkSaved, onHide, onDelete }) {
   const { settings } = useSettings();
   const now = useNow();
@@ -179,6 +223,7 @@ function PlatformSheet({ person, rooms, t, onClose, onLaunch, onAsk, onLinkSaved
             </View>
           )}
           <ZonePicker person={person} t={t} />
+          <BeforeYouCall person={person} t={t} />
 
           <Text style={[ui.section, { color: t.muted }]}>Video</Text>
           {person.platforms.map((p) => (
@@ -259,17 +304,29 @@ function CallCheck({ call, t, onWorked, onFailed }) {
 
 // After a call that worked: "Anything to remember?" - type or use the keyboard's mic to dictate.
 function AfterCallNotes({ call, t, onDone, onTasks }) {
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const [note, setNote] = useState(call.note ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [kept, setKept] = useState('');       // shown when the note had nothing to do, only things to remember
+  const recorded = useRef(false);
+  const first = call.person.name.split(' ')[0];
   const find = async () => {
     setBusy(true); setError('');
     try {
       const apiKey = settings.aiProvider === 'claude' ? await getAiKey() : null;
       const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const found = await analyzeNote({ note, personName: call.person.name, ai: { provider: settings.aiProvider, apiKey }, timeZone: zone });
-      if (found.tasks.length) onTasks(found.tasks, note); else setError('No tasks found in that note.');
+      if (!recorded.current) {                    // the call goes into their history once, even if you tap again
+        recorded.current = true;
+        update(recordCall({ person: call.person, platform: call.platform, note, found }));
+      }
+      if (found.tasks.length) onTasks(found.tasks, note);
+      else {
+        const n = found.follow_ups.length;
+        setKept(n ? `Saved. Next time you call ${first}, Krypu will remind you to ask about ${n === 1 ? 'one thing' : `${n} things`}.`
+                  : `Saved to ${first}'s call history.`);
+      }
     } catch (e) {
       setError(e.message || "Couldn't reach the AI. Check your connection and try again.");
     } finally { setBusy(false); }
@@ -281,14 +338,23 @@ function AfterCallNotes({ call, t, onDone, onTasks }) {
         placeholder="Mom wants help with her printer on Saturday…  (tap the keyboard mic to talk)" placeholderTextColor={t.muted}
         style={[styles.note, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />
       {!!error && <Text style={[styles.sub, { color: t.clay }]}>{error}</Text>}
-      <View style={styles.rowGap}>
-        <Pressable onPress={onDone} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
-          <Text style={[ui.primaryText, { color: t.muted }]}>Nothing</Text>
-        </Pressable>
-        <Pressable onPress={find} disabled={!note.trim() || busy} style={[styles.half, { backgroundColor: note.trim() ? t.sage : t.line }]}>
-          {busy ? <ActivityIndicator color={t.paper} /> : <Text style={[ui.primaryText, { color: note.trim() ? t.paper : t.muted }]}>Find tasks</Text>}
-        </Pressable>
-      </View>
+      {kept ? (
+        <>
+          <Text style={[styles.sub, { color: t.sage, fontSize: 15 }]}>{kept}</Text>
+          <Pressable onPress={onDone} style={[ui.primary, { backgroundColor: t.sage }]}>
+            <Text style={[ui.primaryText, { color: t.paper }]}>OK</Text>
+          </Pressable>
+        </>
+      ) : (
+        <View style={styles.rowGap}>
+          <Pressable onPress={onDone} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
+            <Text style={[ui.primaryText, { color: t.muted }]}>Nothing</Text>
+          </Pressable>
+          <Pressable onPress={find} disabled={!note.trim() || busy} style={[styles.half, { backgroundColor: note.trim() ? t.sage : t.line }]}>
+            {busy ? <ActivityIndicator color={t.paper} /> : <Text style={[ui.primaryText, { color: note.trim() ? t.paper : t.muted }]}>Save note</Text>}
+          </Pressable>
+        </View>
+      )}
     </View>
   );
 }
@@ -304,19 +370,19 @@ function TasksPopup({ found, t, onClose }) {
   const main = TASK_TARGETS.find((x) => x.key === settings.taskTarget);
   const others = TASK_TARGETS.filter((x) => x !== main);
 
+  // Chosen tasks always go on Krypu's own task list (Tasks screen + the person's sheet), and also to the app you pick.
   const save = async (target) => {
-    update((s) => ({ ...s, taskTarget: target.key,
-      // keep a record on the person too
-      notes: { ...s.notes, [found.person.id]: [s.notes[found.person.id], ...chosen.map((x) => `• ${x.title}`)].filter(Boolean).join('\n') } }));
-    try { await saveTasks(target.key, chosen, { personName: found.person.name, myEmail: settings.myEmail }); } catch {}
-    setSaved(target.label);
+    update((s) => addTasks({ person: found.person, tasks: chosen })(target ? { ...s, taskTarget: target.key } : s));
+    if (target) try { await saveTasks(target.key, chosen, { personName: found.person.name, myEmail: settings.myEmail }); } catch {}
+    setSaved(target ? target.label : 'Krypu');
   };
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={onClose}>
       <Pressable style={[styles.scrim, { backgroundColor: t.scrim }]} onPress={onClose}>
         <Pressable style={[styles.sheet, styles.sheetBody, { backgroundColor: t.paper, borderColor: t.line, paddingBottom: 32 + insets.bottom }]}>
-          <Text style={[styles.sheetTitle, { color: t.ink }]}>{saved ? `Saved to ${saved}` : 'Tasks from your call'}</Text>
+          <Text style={[styles.sheetTitle, { color: t.ink }]}>{saved ? (saved === 'Krypu' ? 'Kept in Krypu' : `Saved to ${saved}`) : 'Tasks from your call'}</Text>
+          {!!saved && <Text style={[styles.sub, { color: t.muted, marginTop: -6 }]}>Also on your Tasks list and on {found.person.name.split(' ')[0]}'s card.</Text>}
           {found.tasks.map((task, i) => (
             <Pressable key={i} onPress={() => setPicked((p) => p.map((v, j) => (j === i ? !v : v)))}
               style={[styles.option, { backgroundColor: t.card, borderColor: picked[i] ? t.sage : t.line }]}>
@@ -350,6 +416,9 @@ function TasksPopup({ found, t, onClose }) {
                   </Pressable>
                 ))}
               </View>
+              <Pressable onPress={() => save(null)} disabled={!chosen.length} style={styles.cancel}>
+                <Text style={[styles.cancelText, { color: chosen.length ? t.sage : t.muted }]}>Keep in Krypu only</Text>
+              </Pressable>
             </>
           )}
         </Pressable>
@@ -512,7 +581,8 @@ export default function Home() {
     const info = { person, platform: params.platform, mine: false, note: params.note };
     if (params.failed) { setBroken((b) => new Set(b).add(`${person.id}:${params.platform}`)); setFix(info); }
     else setNotesFor(info);
-    router.setParams({ after: undefined, note: undefined, failed: undefined, platform: undefined });
+    // clear the one-time params after the navigator has mounted (a cold start straight to Home would crash otherwise)
+    setTimeout(() => router.setParams({ after: undefined, note: undefined, failed: undefined, platform: undefined }), 0);
   }, [params.after, contacts.people.length]);
   const [copied, setCopied] = useState(null);      // {url, platform} found on the clipboard, not saved yet
   const seenClip = useRef('');
@@ -652,6 +722,12 @@ export default function Home() {
     <Screen footer={footer}>
       <View style={styles.titleRow}>
         <Text style={[ui.title, styles.flex, { color: t.ink }]}>{picking ? 'Who should join?' : 'Who do you want to see?'}</Text>
+        {!picking && settings.tasks.length > 0 && (
+          <Pressable onPress={() => router.push('/tasks')} hitSlop={10} accessibilityLabel="Tasks"
+            style={[styles.gear, styles.tasksBtn, { borderColor: t.line, backgroundColor: t.card }]}>
+            <Text numberOfLines={1} style={{ color: t.sage, fontSize: 15, fontWeight: '700' }}>✓ {settings.tasks.filter((x) => !x.done).length}</Text>
+          </Pressable>
+        )}
         {!picking && (
           <Pressable onPress={() => router.push('/settings')} hitSlop={10} accessibilityLabel="Settings"
             style={[styles.gear, { borderColor: t.line, backgroundColor: t.card }]}>
@@ -790,6 +866,10 @@ const styles = StyleSheet.create({
   groupBtn: { padding: 11, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', alignItems: 'center' },
   groupText: { fontSize: 15, fontWeight: '600' },
   rowGap: { flexDirection: 'row', gap: 8 },
+  memRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  tasksBtn: { width: 'auto', minWidth: 42, paddingHorizontal: 10 },
+  askedBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 },
+  smallCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 2 },
   // local time sits on its own line: beside the name, Android measured it too short and clipped it
   time: { flexShrink: 0 },
   timeLine: { marginTop: -4 },
