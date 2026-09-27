@@ -3,7 +3,7 @@
 // box. End call → back home to the after-call notes (just notes / tasks / schedule the next call).
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { PermissionsAndroid, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, PermissionsAndroid, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useContacts } from '../contacts';
@@ -17,20 +17,23 @@ import { ui } from '../ui';
 // FaceTime's web page supports Chrome; present the in-app view as plain Chrome for Android
 const CHROME_UA = 'Mozilla/5.0 (Linux; Android 15; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36';
 
-// Fill FaceTime's name box once it appears (React-controlled input: use the native setter, then fire input/change).
-const fillName = (name) => `(function () {
-  var name = ${JSON.stringify(name)}, tries = 0;
-  var timer = setInterval(function () {
-    tries += 1;
+// Runs inside FaceTime's page for the whole call:
+//  - fills the "Enter your name" box whenever it's empty (first join, and again if the page comes back after a call);
+//  - tells Krypu when the call ends from FaceTime's own hang-up button (video was showing, then gone for ~3 s).
+const pageScript = (name) => `(function () {
+  if (window.__krypu) return true; window.__krypu = true;
+  var name = ${JSON.stringify(name)}, inCall = false, gone = 0, told = false;
+  setInterval(function () {
     var el = document.querySelector('input[type="text"], input:not([type])');
-    if (el && !el.value) {
+    if (name && el && !el.value && document.activeElement !== el) {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, name);
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
-      clearInterval(timer);
     }
-    if (tries > 80) clearInterval(timer);
-  }, 500);
+    var video = document.querySelector('video');
+    if (video) { inCall = true; gone = 0; }
+    else if (inCall && !told && ++gone >= 3) { told = true; window.ReactNativeWebView.postMessage('ended'); }
+  }, 1000);
 })(); true;`;
 
 export default function Call() {
@@ -44,6 +47,13 @@ export default function Call() {
   const [allowed, setAllowed] = useState(Platform.OS !== 'android');
   const [callNote, setCallNote] = useState('');
   const [error, setError] = useState('');
+  const [kb, setKb] = useState(0);            // keyboard height: the video shrinks so your notes stay above it
+
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', (e) => setKb(e.endCoordinates.height));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKb(0));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
   // camera + microphone for the call (Android asks once)
   useEffect(() => {
@@ -59,10 +69,13 @@ export default function Call() {
   if (!settings || !person) return <View style={[styles.root, { backgroundColor: t.paper }]} />;
   const zone = settings.tz[person.id] ?? guessZone(person.phone);
   const first = person.name.split(' ')[0];
-  const done = (failed) => router.replace({ pathname: '/', params: { after: person.id, platform, note: callNote, failed: failed ? '1' : '' } });
+  const done = (failed) => {
+    Keyboard.dismiss();
+    router.replace({ pathname: '/', params: { after: person.id, platform, note: callNote, failed: failed ? '1' : '' } });
+  };
 
   return (
-    <View style={[styles.root, { backgroundColor: t.paper, paddingTop: insets.top + 6, paddingBottom: insets.bottom + 8 }]}>
+    <View style={[styles.root, { backgroundColor: t.paper, paddingTop: insets.top + 6, paddingBottom: kb ? kb + 8 : insets.bottom + 8 }]}>
       <View style={styles.header}>
         <View style={styles.flex}>
           <Text style={[styles.title, { color: t.ink }]} numberOfLines={1}>{PLATFORMS[platform].label} with {person.name}</Text>
@@ -73,11 +86,12 @@ export default function Call() {
         </Pressable>
       </View>
 
-      <View style={[styles.video, { borderColor: t.line, backgroundColor: '#000' }]}>
+      <View style={[styles.video, kb ? { flex: 1 } : null, { borderColor: t.line, backgroundColor: '#000' }]}>
         {allowed && url && Platform.OS !== 'web' ? (
           <WebView source={{ uri: url }} userAgent={CHROME_UA}
             javaScriptEnabled domStorageEnabled allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false}
-            mediaCapturePermissionGrantType="grant" injectedJavaScript={settings.myName ? fillName(settings.myName.trim()) : 'true;'}
+            mediaCapturePermissionGrantType="grant" injectedJavaScript={pageScript((settings.myName ?? '').trim())}
+            onMessage={(e) => { if (e.nativeEvent.data === 'ended') done(false); }}
             onError={(e) => setError(e.nativeEvent.description || "The call page didn't load.")} style={styles.flex} />
         ) : (
           <Text style={[styles.sub, { color: '#bbb', padding: 16 }]}>{error || (url ? 'Starting the call…' : `No ${PLATFORMS[platform].label} link saved for ${first}.`)}</Text>
@@ -85,24 +99,24 @@ export default function Call() {
       </View>
 
       <View style={styles.notes}>
-        {!settings.myName && (
+        {!settings.myName && !kb && (
           <Pressable onPress={() => router.push('/settings')}>
             <Text style={[styles.sub, { color: t.clay }]}>Tip: add your name in Settings and Krypu will fill it in on FaceTime.</Text>
           </Pressable>
         )}
         <TextInput value={callNote} onChangeText={setCallNote} multiline placeholder={`Notes from this call with ${first}…`}
           placeholderTextColor={t.muted} style={[styles.note, { backgroundColor: t.card, borderColor: t.line, color: t.ink }]} />
-        {!!settings.notes[person.id] && (
+        {!!settings.notes[person.id] && !kb && (
           <Text style={[styles.sub, { color: t.muted }]} numberOfLines={2}>Your notes: {settings.notes[person.id]}</Text>
         )}
-        <View style={styles.row}>
+        {!kb && <View style={styles.row}>
           <Pressable onPress={() => openTheirs(person, platform)} style={styles.link}>
             <Text style={[styles.sub, { color: t.muted }]}>Open in Chrome instead</Text>
           </Pressable>
           <Pressable onPress={() => done(true)} style={styles.link}>
             <Text style={[styles.sub, { color: t.clay, fontWeight: '600' }]}>Link didn't work</Text>
           </Pressable>
-        </View>
+        </View>}
       </View>
     </View>
   );

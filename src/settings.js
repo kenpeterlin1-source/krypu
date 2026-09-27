@@ -20,8 +20,9 @@ export const DEFAULTS = {
   // where tasks were saved last time - becomes the default button ('google' | 'calendar' | 'email' | 'text')
   taskTarget: null,
   myEmail: '',
-  // your name as the other person sees it on a FaceTime web call - Krypu types it into the join page for you
-  myName: '',
+  // display name the other person sees on a FaceTime web call - Krypu types it into the join page for you
+  // (Ken's for now; becomes a first-run question when the app is shared)
+  myName: 'Ken',
   // everything Krypu remembers about calls, kept on the phone:
   //   tasks: [{id, personId, personName, title, due_date, due_time, done, createdAt}]
   //   calls: {personId: [{id, at, platform, note, followUps: [{text, done}], facts: [..]}]}  (newest first)
@@ -53,6 +54,7 @@ export function SettingsProvider({ children }) {
         setSettings({ ...DEFAULTS, ...saved, enabled: { ...DEFAULTS.enabled, ...saved.enabled },
                       myRooms: { ...DEFAULTS.myRooms, ...saved.myRooms }, notes: { ...saved.notes }, tz: { ...saved.tz },
                       tasks: saved.tasks ?? [], calls: { ...saved.calls }, groups: saved.groups ?? [],
+                      myName: saved.myName || DEFAULTS.myName,
                       iphone: { ...saved.iphone }, asked: { ...saved.asked }, hidden: { ...saved.hidden }, lastText: { ...saved.lastText } });
       })
       .catch(() => setSettings(DEFAULTS));
