@@ -1,6 +1,6 @@
 // Upcoming meetings from the phone's calendars that have a video link (Zoom, Meet, Teams, FaceTime, Jitsi…), for the
 // "Coming up" list on Home. Read-only; nothing leaves the phone. Calendars can be switched off in Settings.
-import * as Calendar from 'expo-calendar';
+import * as Calendar from 'expo-calendar/legacy';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { detectPlatform } from './platforms';
