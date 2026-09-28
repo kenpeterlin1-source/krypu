@@ -41,8 +41,10 @@ export function useMeetings(hiddenCalendars = {}, hours = 36) {
                        calendar: cals.find((c) => c.id === e.calendarId)?.title, link: meetingLink(e) }))
         .filter((m) => m.link && new Date(m.end).getTime() > now)
         .sort((a, b) => new Date(a.start) - new Date(b.start));
+      console.log(`[meetings] calendars=${cals.length} events=${events.length} withLinks=${meetings.length}`);
       setState({ status: 'ready', meetings });
-    } catch {
+    } catch (e) {
+      console.warn('[meetings] load failed', e?.message ?? e);
       setState({ status: 'ready', meetings: [] });
     }
   }, [JSON.stringify(hiddenCalendars), hours]);

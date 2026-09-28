@@ -30,8 +30,8 @@ export const PLATFORMS = {
   teams: {
     label: 'Teams',
     tone: 'plum',
-    // personal (teams.live.com/meet) and work (teams.microsoft.com/l/meetup-join or /l/call) links
-    match: (url) => /^https:\/\/(teams\.live\.com\/meet\/|teams\.microsoft\.com\/l\/(meetup-join|call)\/)/i.test(url),
+    // personal (teams.live.com/meet) and work (teams.microsoft.com/l/meetup-join, /l/call or the newer /meet/<id>) links
+    match: (url) => /^https:\/\/(teams\.live\.com\/meet\/|teams\.microsoft\.com\/(l\/(meetup-join|call)|meet)\/)/i.test(url),
     how: 'Opens their Teams meeting or call in the Teams app.',
   },
   slack: {
