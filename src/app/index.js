@@ -8,7 +8,7 @@ import { HOSTABLE } from '../myRooms';
 import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
 import { addTasks, dueLabel, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { itemsFromNote, NoteLines, parseWhen } from '../noteLines';
-import { meetingTime, useMeetings } from '../meetings';
+import { meetingTime, openEvent, useMeetings } from '../meetings';
 import { IN_APP, PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
@@ -148,43 +148,81 @@ function Option({ t, tone, title, how, dashed, onPress }) {
   );
 }
 
-// Meetings from your calendars in the next day and a half that have a video link: tap Join.
+const VIEWS = [['personal', 'Personal'], ['business', 'Business'], ['all', 'All']];
+
+// Your next events from the calendars chosen in Settings. Personal / Business / All switches which accounts show.
+// Events with a video link get Join; the rest open in your calendar app.
 function ComingUp({ t, onJoin }) {
-  const { settings } = useSettings();
+  const { settings, update } = useSettings();
   const now = useNow();
-  const cal = useMeetings(settings.hiddenCalendars);
+  const [more, setMore] = useState(false);
+  const cal = useMeetings(settings.hiddenCalendars, settings.calendarAccounts);
   if (cal.status === 'web' || cal.status === 'loading' || cal.status === 'denied') return null;
   if (cal.status === 'ask') {
     return (
       <Pressable onPress={cal.ask} style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sky }]}>
         <Text style={[styles.name, { color: t.ink }]}>See your meetings here</Text>
         <Text style={[styles.sub, { color: t.muted }]}>
-          Krypu can read your calendar and list upcoming Zoom, Meet, Teams and FaceTime meetings, so you join from here and take
-          notes. It stays on your phone.
+          Krypu can read your calendar and list what is coming up, so you join Zoom, Meet, Teams and FaceTime meetings from here
+          and take notes. It stays on your phone.
         </Text>
         <Text style={{ color: t.sky, fontWeight: '700' }}>Allow calendar ›</Text>
       </Pressable>
     );
   }
+  const kinds = new Set(cal.meetings.map((m) => m.kind));
+  const view = kinds.size > 1 ? settings.meetingView ?? 'all' : 'all';
+  const shown = cal.meetings.filter((m) => view === 'all' || m.kind === view);
   if (!cal.meetings.length) return null;
+  const list = shown.slice(0, more ? 10 : 3);
   return (
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.line }]}>
-      <Text style={[ui.section, { color: t.muted, marginTop: 0 }]}>Coming up</Text>
-      {cal.meetings.slice(0, 5).map((m) => {
-        const { label, tone } = PLATFORMS[m.link.platform];
+      <View style={styles.memRow}>
+        <Text style={[ui.section, styles.flex, { color: t.muted, marginTop: 0, marginBottom: 0 }]}>Coming up</Text>
+        {kinds.size > 1 && (
+          <View style={[styles.segment, { borderColor: t.line }]}>
+            {VIEWS.map(([key, label]) => (
+              <Pressable key={key} onPress={() => { setMore(false); update((s) => ({ ...s, meetingView: key })); }} hitSlop={4}
+                style={[styles.segmentBtn, view === key && { backgroundColor: t.skySoft }]} accessibilityLabel={`Show ${label} meetings`}>
+                <Text style={{ color: view === key ? t.sky : t.muted, fontWeight: '700', fontSize: 13 }}>{label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+      {!list.length && (
+        <Text style={[styles.sub, { color: t.muted }]}>Nothing in the next week.</Text>
+      )}
+      {list.map((m) => {
         const live = new Date(m.start) <= now;
-        return (
-          <View key={`${m.id}-${m.start}`} style={styles.memRow}>
-            <View style={styles.flex}>
-              <Text style={[styles.sub, { color: live ? t.clay : t.muted, fontWeight: '700' }]}>{meetingTime(m, now)} · {label}</Text>
-              <Text style={[styles.name, { color: t.ink, fontSize: 16 }]} numberOfLines={2}>{m.title}</Text>
-            </View>
-            <Pressable onPress={() => onJoin(m)} style={[styles.joinBtn, { backgroundColor: live ? t.clay : t[tone] }]}>
+        const where = m.link ? PLATFORMS[m.link.platform].label : m.location;
+        const row = (
+          <View style={styles.flex}>
+            <Text style={[styles.sub, { color: live ? t.clay : t.muted, fontWeight: '700' }]} numberOfLines={1}>
+              {meetingTime(m, now)}{where ? ` · ${where}` : ''}
+            </Text>
+            <Text style={[styles.name, { color: t.ink, fontSize: 16 }]} numberOfLines={2}>{m.title}</Text>
+          </View>
+        );
+        return m.link ? (
+          <View key={m.id} style={styles.memRow}>
+            {row}
+            <Pressable onPress={() => onJoin(m)} style={[styles.joinBtn, { backgroundColor: live ? t.clay : t[PLATFORMS[m.link.platform].tone] }]}>
               <Text style={{ color: t.paper, fontWeight: '700' }}>Join</Text>
             </Pressable>
           </View>
+        ) : (
+          <Pressable key={m.id} onPress={() => openEvent(m)} style={styles.memRow} accessibilityLabel={`Open ${m.title} in your calendar`}>
+            {row}
+            <Text style={{ color: t.muted, fontSize: 20 }}>›</Text>
+          </Pressable>
         );
       })}
+      {shown.length > 3 && (
+        <Pressable onPress={() => setMore(!more)} hitSlop={8}>
+          <Text style={{ color: t.sky, fontWeight: '700' }}>{more ? 'Show less' : `Show ${Math.min(shown.length, 10) - 3} more`}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -979,6 +1017,8 @@ const styles = StyleSheet.create({
   rowGap: { flexDirection: 'row', gap: 8 },
   memRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   joinBtn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12 },
+  segment: { flexDirection: 'row', borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
+  segmentBtn: { paddingVertical: 5, paddingHorizontal: 9 },
   tasksBtn: { width: 'auto', minWidth: 42, paddingHorizontal: 10 },
   askedBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 },
   smallCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 2 },

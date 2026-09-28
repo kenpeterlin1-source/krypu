@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import AiSetup from '../AiSetup';
 import { useContacts } from '../contacts';
-import { calendarList } from '../meetings';
+import { accountKind, calendarList } from '../meetings';
 import * as Messages from '../messages';
 import { HOSTABLE, SETUP_HELP } from '../myRooms';
 import { TASK_TARGETS } from '../saveTasks';
@@ -214,27 +214,55 @@ export default function Settings() {
 const styles = StyleSheet.create({ watchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 } });
 
 // Which calendars feed "Coming up" on Home (all by default; switch off e.g. a work calendar).
+const KINDS = [['personal', 'Personal'], ['business', 'Business'], ['off', 'Off']];
+
+// Which calendars feed "Coming up": each account is Personal, Business or Off, and single calendars can be switched off.
 function Calendars({ t }) {
   const { settings, update } = useSettings();
   const [cals, setCals] = useState([]);
   useEffect(() => { calendarList().then(setCals).catch(() => {}); }, []);
   if (!cals.length) return null;
+  const accounts = [...new Set(cals.map((c) => c.account))];
+  const setKind = (account, kind) => update((s) => ({ ...s, calendarAccounts: { ...s.calendarAccounts, [account]: kind } }));
+  const toggleCal = (id, on) => update((s) => ({ ...s, hiddenCalendars: { ...s.hiddenCalendars, [id]: on || undefined } }));
   return (
     <>
       <Text style={[ui.section, { color: t.muted }]}>Calendars for "Coming up"</Text>
-      <View style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
-        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>Meetings with a video link from these calendars show on Home. Read on your phone only.</Text>
-        <View style={ui.chips}>
-          {cals.map((c) => {
-            const on = !settings.hiddenCalendars[c.id];
-            return (
-              <Pressable key={c.id} onPress={() => update((s) => ({ ...s, hiddenCalendars: { ...s.hiddenCalendars, [c.id]: on || undefined } }))}
-                style={[ui.chip, { paddingVertical: 7, paddingHorizontal: 12, borderWidth: 1, borderColor: on ? t.sky : t.line, backgroundColor: on ? t.skySoft : t.card }]}>
-                <Text style={[ui.chipText, { color: on ? t.sky : t.muted }]}>{on ? '✓ ' : ''}{c.title}{c.account && c.account !== c.title ? ` · ${c.account}` : ''}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+      <View style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 14 }]}>
+        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>
+          Mark each account Personal or Business, then switch between them on Home. Read on your phone only.
+        </Text>
+        {accounts.map((account) => {
+          const kind = accountKind(account, settings.calendarAccounts);
+          return (
+            <View key={account} style={{ gap: 8 }}>
+              <Text style={[ui.rowTitle, { color: t.ink }]} numberOfLines={1}>{account}</Text>
+              <View style={ui.chips}>
+                {KINDS.map(([key, label]) => (
+                  <Pressable key={key} onPress={() => setKind(account, key)}
+                    style={[ui.chip, { paddingVertical: 7, paddingHorizontal: 12, borderWidth: 1,
+                      borderColor: kind === key ? t.sky : t.line, backgroundColor: kind === key ? t.skySoft : t.card }]}>
+                    <Text style={[ui.chipText, { color: kind === key ? t.sky : t.muted }]}>{kind === key ? '✓ ' : ''}{label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              {kind !== 'off' && cals.filter((c) => c.account === account).length > 1 && (
+                <View style={ui.chips}>
+                  {cals.filter((c) => c.account === account).map((c) => {
+                    const on = !settings.hiddenCalendars[c.id];
+                    return (
+                      <Pressable key={c.id} onPress={() => toggleCal(c.id, on)}
+                        style={[ui.chip, { paddingVertical: 5, paddingHorizontal: 10, borderWidth: 1, borderColor: on ? t.line : t.line,
+                          backgroundColor: on ? t.paper : t.card, opacity: on ? 1 : 0.55 }]}>
+                        <Text style={[ui.chipText, { color: on ? t.ink : t.muted, fontSize: 13 }]}>{on ? '✓ ' : ''}{c.title === account ? 'Main' : c.title}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })}
       </View>
     </>
   );
