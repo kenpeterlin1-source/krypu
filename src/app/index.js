@@ -8,6 +8,7 @@ import { HOSTABLE } from '../myRooms';
 import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
 import { addTasks, dueLabel, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { itemsFromNote, NoteLines, parseWhen } from '../noteLines';
+import { meetingTime, useMeetings } from '../meetings';
 import { IN_APP, PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
@@ -144,6 +145,47 @@ function Option({ t, tone, title, how, dashed, onPress }) {
         <Text style={[styles.sub, { color: t.muted }]}>{how}</Text>
       </View>
     </Pressable>
+  );
+}
+
+// Meetings from your calendars in the next day and a half that have a video link: tap Join.
+function ComingUp({ t, onJoin }) {
+  const { settings } = useSettings();
+  const now = useNow();
+  const cal = useMeetings(settings.hiddenCalendars);
+  if (cal.status === 'web' || cal.status === 'loading' || cal.status === 'denied') return null;
+  if (cal.status === 'ask') {
+    return (
+      <Pressable onPress={cal.ask} style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sky }]}>
+        <Text style={[styles.name, { color: t.ink }]}>See your meetings here</Text>
+        <Text style={[styles.sub, { color: t.muted }]}>
+          Krypu can read your calendar and list upcoming Zoom, Meet, Teams and FaceTime meetings, so you join from here and take
+          notes. It stays on your phone.
+        </Text>
+        <Text style={{ color: t.sky, fontWeight: '700' }}>Allow calendar ›</Text>
+      </Pressable>
+    );
+  }
+  if (!cal.meetings.length) return null;
+  return (
+    <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.line }]}>
+      <Text style={[ui.section, { color: t.muted, marginTop: 0 }]}>Coming up</Text>
+      {cal.meetings.slice(0, 5).map((m) => {
+        const { label, tone } = PLATFORMS[m.link.platform];
+        const live = new Date(m.start) <= now;
+        return (
+          <View key={`${m.id}-${m.start}`} style={styles.memRow}>
+            <View style={styles.flex}>
+              <Text style={[styles.sub, { color: live ? t.clay : t.muted, fontWeight: '700' }]}>{meetingTime(m, now)} · {label}</Text>
+              <Text style={[styles.name, { color: t.ink, fontSize: 16 }]} numberOfLines={2}>{m.title}</Text>
+            </View>
+            <Pressable onPress={() => onJoin(m)} style={[styles.joinBtn, { backgroundColor: live ? t.clay : t[tone] }]}>
+              <Text style={{ color: t.paper, fontWeight: '700' }}>Join</Text>
+            </Pressable>
+          </View>
+        );
+      })}
+    </View>
   );
 }
 
@@ -628,7 +670,8 @@ export default function Home() {
   const params = useLocalSearchParams();
   useEffect(() => {
     if (!params.after) return;
-    const person = contacts.people.find((p) => p.id === params.after);
+    const person = contacts.people.find((p) => p.id === params.after)
+      ?? (params.title ? { id: params.after, name: params.title, phone: null, links: {}, platforms: [] } : null);   // a calendar meeting
     if (!person) return;
     let items = null;
     try { items = params.items ? JSON.parse(params.items) : null; } catch {}
@@ -636,7 +679,7 @@ export default function Home() {
     if (params.failed) { setBroken((b) => new Set(b).add(`${person.id}:${params.platform}`)); setFix(info); }
     else setNotesFor(info);
     // clear the one-time params after the navigator has mounted (a cold start straight to Home would crash otherwise)
-    setTimeout(() => router.setParams({ after: undefined, note: undefined, items: undefined, failed: undefined, platform: undefined }), 0);
+    setTimeout(() => router.setParams({ after: undefined, note: undefined, items: undefined, failed: undefined, platform: undefined, title: undefined }), 0);
   }, [params.after, contacts.people.length]);
   const [copied, setCopied] = useState(null);      // {url, platform} found on the clipboard, not saved yet
   const seenClip = useRef('');
@@ -713,6 +756,16 @@ export default function Home() {
       ? [() => textTo(person, nudgeText('facetime')), open]
       : [open];
     run({ person, platform, mine, screen: split }, steps);
+  };
+  // join a calendar meeting: in-app call screen when the platform can run in Krypu, otherwise its own app; either way
+  // the after-call notes are filed under the meeting's title
+  const joinMeeting = (m) => {
+    const who = { id: `event:${m.id}`, name: m.title, phone: null, links: { [m.link.platform]: m.link.url }, platforms: [m.link.platform] };
+    const inApp = Platform.OS === 'android' && IN_APP.includes(m.link.platform);
+    const open = inApp
+      ? () => router.push({ pathname: '/call', params: { id: who.id, platform: m.link.platform, url: m.link.url, title: m.title } })
+      : () => Linking.openURL(m.link.url);
+    run({ person: who, platform: m.link.platform, mine: false, screen: inApp }, [open]);
   };
   const markAsked = (person, platform) => update((s) => ({ ...s,
     asked: { ...s.asked, [person.id]: { platform, at: new Date().toISOString() } },
@@ -793,6 +846,7 @@ export default function Home() {
         )}
       </View>
       {!picking && <UpdateBanner />}
+      {!picking && <ComingUp t={t} onJoin={joinMeeting} />}
       {!picking && autoSaved.length > 0 && (
         <Pressable onPress={() => setAutoSaved([])} style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sage }]}>
           <Text style={[styles.name, { color: t.ink }]}>Saved from your texts</Text>
@@ -924,6 +978,7 @@ const styles = StyleSheet.create({
   groupText: { fontSize: 15, fontWeight: '600' },
   rowGap: { flexDirection: 'row', gap: 8 },
   memRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  joinBtn: { paddingVertical: 9, paddingHorizontal: 16, borderRadius: 12 },
   tasksBtn: { width: 'auto', minWidth: 42, paddingHorizontal: 10 },
   askedBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 4, paddingHorizontal: 8 },
   smallCheck: { width: 20, height: 20, borderRadius: 6, borderWidth: 2 },

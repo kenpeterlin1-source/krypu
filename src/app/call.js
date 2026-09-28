@@ -44,11 +44,12 @@ const pageScript = (name) => `(function () {
 export default function Call() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const { id, platform = 'facetime', testUrl, url: roomUrl } = useLocalSearchParams();
+  const { id, platform = 'facetime', testUrl, url: roomUrl, title } = useLocalSearchParams();
   const { settings } = useSettings();
   const contacts = useContacts();
   const now = useNow();
-  const person = contacts.people.find((p) => p.id === id);
+  // a contact, or a calendar meeting (no contact): shown by its title
+  const person = contacts.people.find((p) => p.id === id) ?? (title ? { id, name: title, phone: null, links: {} } : undefined);
   const [allowed, setAllowed] = useState(Platform.OS !== 'android');
   const [items, setItems] = useState([]);     // your notes, one line each, with follow up / schedule / note
   const [error, setError] = useState('');
@@ -79,7 +80,7 @@ export default function Call() {
   const done = (failed) => {
     Keyboard.dismiss();
     router.replace({ pathname: '/', params: { after: person.id, platform, note: items.map((x) => x.text).join('\n'),
-                                              items: JSON.stringify(items), failed: failed ? '1' : '' } });
+                                              items: JSON.stringify(items), title: title ?? '', failed: failed ? '1' : '' } });
   };
 
   return (

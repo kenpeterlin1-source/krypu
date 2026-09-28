@@ -21,7 +21,8 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.READ_CALENDAR"
       ]
     },
     "web": {
@@ -48,6 +49,12 @@
         "expo-contacts",
         {
           "contactsPermission": "Krypu shows who you can video-call and saves their call links on their contact card."
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Krypu shows your upcoming video meetings so you can join them and take notes."
         }
       ]
     ],

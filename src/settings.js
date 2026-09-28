@@ -36,6 +36,8 @@ export const DEFAULTS = {
   asked: {},
   // people hidden from Krypu (still in your phone's contacts): {contactId: name}
   hidden: {},
+  // calendars left out of "Coming up" (e.g. a work calendar): {calendarId: true}
+  hiddenCalendars: {},
   // true once you chose "Delete, and don't ask again"
   skipDeleteConfirm: false,
   // when Krypu last opened a text to each person: {contactId: ISO time} - skips a repeat nudge right after
@@ -55,7 +57,7 @@ export function SettingsProvider({ children }) {
                       myRooms: { ...DEFAULTS.myRooms, ...saved.myRooms }, notes: { ...saved.notes }, tz: { ...saved.tz },
                       tasks: saved.tasks ?? [], calls: { ...saved.calls }, groups: saved.groups ?? [],
                       myName: saved.myName || DEFAULTS.myName,
-                      iphone: { ...saved.iphone }, asked: { ...saved.asked }, hidden: { ...saved.hidden }, lastText: { ...saved.lastText } });
+                      iphone: { ...saved.iphone }, hiddenCalendars: { ...saved.hiddenCalendars }, asked: { ...saved.asked }, hidden: { ...saved.hidden }, lastText: { ...saved.lastText } });
       })
       .catch(() => setSettings(DEFAULTS));
   }, []);

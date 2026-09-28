@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import AiSetup from '../AiSetup';
 import { useContacts } from '../contacts';
+import { calendarList } from '../meetings';
 import * as Messages from '../messages';
 import { HOSTABLE, SETUP_HELP } from '../myRooms';
 import { TASK_TARGETS } from '../saveTasks';
@@ -166,6 +167,8 @@ export default function Settings() {
           style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
       </View>
 
+      <Calendars t={t} />
+
       <Text style={[ui.section, { color: t.muted }]}>Display name</Text>
       <View style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
         <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>The name people see when you join their FaceTime. Krypu types it in for you.</Text>
@@ -209,3 +212,30 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({ watchRow: { flexDirection: 'row', alignItems: 'center', gap: 12 } });
+
+// Which calendars feed "Coming up" on Home (all by default; switch off e.g. a work calendar).
+function Calendars({ t }) {
+  const { settings, update } = useSettings();
+  const [cals, setCals] = useState([]);
+  useEffect(() => { calendarList().then(setCals).catch(() => {}); }, []);
+  if (!cals.length) return null;
+  return (
+    <>
+      <Text style={[ui.section, { color: t.muted }]}>Calendars for "Coming up"</Text>
+      <View style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 8 }]}>
+        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>Meetings with a video link from these calendars show on Home. Read on your phone only.</Text>
+        <View style={ui.chips}>
+          {cals.map((c) => {
+            const on = !settings.hiddenCalendars[c.id];
+            return (
+              <Pressable key={c.id} onPress={() => update((s) => ({ ...s, hiddenCalendars: { ...s.hiddenCalendars, [c.id]: on || undefined } }))}
+                style={[ui.chip, { paddingVertical: 7, paddingHorizontal: 12, borderWidth: 1, borderColor: on ? t.sky : t.line, backgroundColor: on ? t.skySoft : t.card }]}>
+                <Text style={[ui.chipText, { color: on ? t.sky : t.muted }]}>{on ? '✓ ' : ''}{c.title}{c.account && c.account !== c.title ? ` · ${c.account}` : ''}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </>
+  );
+}
