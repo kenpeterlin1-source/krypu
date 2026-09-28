@@ -385,3 +385,8 @@ is only worth it if the three Apple users won't move off FaceTime — which is u
   - **Jitsi caveat:** meet.jit.si now requires the first person to log in as moderator (Google/GitHub). Ken's own
     Jitsi room needs that login, or switch to another Jitsi server.
   - Not yet tested: a real Zoom meeting, a full FaceTime call with the new notes, the Meet/Teams/WhatsApp return flow.
+
+## Status 2026-09-28
+- SMS: allowed (Android 17 needed App info → ⋮ → Allow restricted settings first). "Find links in my old texts" scanned 3,072 texts, no new links.
+- Calendar "Coming up" works (fix: import `expo-calendar/legacy`; the root API throws on legacy calls in SDK 57). Shows Teams + Zoom work meetings.
+- Next test: Ken joins the Tue 2026-09-29 1:00 pm Zoom from Coming up → in-app Zoom web client + notes → after-call notes flow.
