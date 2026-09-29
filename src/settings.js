@@ -20,9 +20,9 @@ export const DEFAULTS = {
   // where tasks were saved last time - becomes the default button ('google' | 'calendar' | 'email' | 'text')
   taskTarget: null,
   myEmail: '',
-  // display name the other person sees on a FaceTime web call - Krypu types it into the join page for you
-  // (Ken's for now; becomes a first-run question when the app is shared)
-  myName: 'Ken',
+  // display name the other person sees on a web call (FaceTime, Jitsi, Zoom) - Krypu types it into the join page.
+  // Blank on a new install; the call screen asks for it, and it's editable in Settings.
+  myName: '',
   // everything Krypu remembers about calls, kept on the phone:
   //   tasks: [{id, personId, personName, title, due_date, due_time, done, createdAt}]
   //   calls: {personId: [{id, at, platform, note, followUps: [{text, done}], facts: [..]}]}  (newest first)
@@ -60,7 +60,7 @@ export function SettingsProvider({ children }) {
         setSettings({ ...DEFAULTS, ...saved, enabled: { ...DEFAULTS.enabled, ...saved.enabled },
                       myRooms: { ...DEFAULTS.myRooms, ...saved.myRooms }, notes: { ...saved.notes }, tz: { ...saved.tz },
                       tasks: saved.tasks ?? [], calls: { ...saved.calls }, groups: saved.groups ?? [],
-                      myName: saved.myName || DEFAULTS.myName,
+                      myName: saved.myName ?? DEFAULTS.myName,
                       iphone: { ...saved.iphone }, hiddenCalendars: { ...saved.hiddenCalendars }, calendarAccounts: { ...saved.calendarAccounts }, asked: { ...saved.asked }, hidden: { ...saved.hidden }, lastText: { ...saved.lastText } });
       })
       .catch(() => setSettings(DEFAULTS));
