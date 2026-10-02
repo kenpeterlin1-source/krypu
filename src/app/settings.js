@@ -167,6 +167,10 @@ export default function Settings() {
         <TextInput value={settings.myEmail} onChangeText={(v) => update({ myEmail: v.trim() })} autoCapitalize="none"
           keyboardType="email-address" placeholder="Your email, for Email" placeholderTextColor={t.muted}
           style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
+        <TextInput value={settings.homeUrl} onChangeText={(v) => update({ homeUrl: v.trim() })} autoCapitalize="none" autoCorrect={false}
+          keyboardType="url" placeholder="Your Peterlin home link, for Peterlin home" placeholderTextColor={t.muted}
+          style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
+        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>On peterlin.com/home, tap Siri and copy the link.</Text>
       </View>
 
       <Pressable onPress={() => shareNotes(notesText(settings, contacts.people)).catch(() => {})}

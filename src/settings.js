@@ -20,6 +20,8 @@ export const DEFAULTS = {
   // where tasks were saved last time - becomes the default button ('google' | 'calendar' | 'email' | 'text')
   taskTarget: null,
   myEmail: '',
+  // your private link from peterlin.com/home (the Siri button) - for saving tasks to Peterlin home
+  homeUrl: '',
   // display name the other person sees on a web call (FaceTime, Jitsi, Zoom) - Krypu types it into the join page.
   // Blank on a new install; the call screen asks for it, and it's editable in Settings.
   myName: '',

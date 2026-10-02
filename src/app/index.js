@@ -514,7 +514,13 @@ function TasksPopup({ found, t, onClose }) {
   // Chosen tasks always go on Krypu's own task list (Tasks screen + the person's sheet), and also to the app you pick.
   const save = async (target) => {
     update((s) => addTasks({ person: found.person, tasks: chosen })(target ? { ...s, taskTarget: target.key } : s));
-    if (target) try { await saveTasks(target.key, chosen, { personName: found.person.name, myEmail: settings.myEmail }); } catch {}
+    if (target) {
+      try { await saveTasks(target.key, chosen, { personName: found.person.name, myEmail: settings.myEmail, homeUrl: settings.homeUrl }); }
+      catch (e) {
+        // the share-sheet targets throw when you back out - that's fine; Peterlin home errors are worth saying
+        if (target.key === 'home') { Alert.alert("Couldn't save to Peterlin home", e.message); setSaved('Krypu'); return; }
+      }
+    }
     setSaved(target ? target.label : 'Krypu');
   };
 
