@@ -657,20 +657,34 @@ function CopiedLink({ copied, people, t, onDone }) {
 const onlyDigits = (s) => (s ?? '').replace(/\D/g, '');
 export const looksLikeNumber = (q) => /^\+?[\d\s().-]+$/.test(q.trim()) && onlyDigits(q).length >= 7;
 
-function CallNumber({ number, people, t, onCall }) {
+function CallNumber({ number: typed, people, t, onCall, onClose }) {
   const [name, setName] = useState('');
+  const [entered, setEntered] = useState('');
+  const number = typed ?? entered;   // typed in the search box, or entered here (the "Call a number" button)
   const known = people.find((p) => p.phone && onlyDigits(p.phone).slice(-10) === onlyDigits(number).slice(-10));
   const person = known ?? { id: `tel:${onlyDigits(number)}`, name: name.trim() || number.trim(), phone: number.trim(), links: {}, platforms: [] };
   return (
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.clay }]}>
-      <Text style={[styles.name, { color: t.ink }]}>Call {known ? known.name : number.trim()}</Text>
+      <Text style={[styles.name, { color: t.ink }]}>Call {known ? known.name : typed ? number.trim() : 'a number'}</Text>
+      {typed == null && (
+        <TextInput value={entered} onChangeText={setEntered} autoFocus keyboardType="phone-pad" placeholder="Phone number"
+          placeholderTextColor={t.muted} style={[styles.search, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />
+      )}
       {known
         ? <Text style={[styles.sub, { color: t.muted }]}>{known.phone} · in your contacts</Text>
         : <TextInput value={name} onChangeText={setName} placeholder="Who is it? (optional, for your notes)" placeholderTextColor={t.muted}
             style={[styles.search, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />}
-      <Pressable onPress={() => onCall(person)} style={[ui.primary, { backgroundColor: t.clay }]}>
-        <Text style={[ui.primaryText, { color: t.onClay }]}>Call</Text>
-      </Pressable>
+      <View style={styles.rowGap}>
+        {onClose && (
+          <Pressable onPress={onClose} style={[styles.half, { backgroundColor: t.paper, borderWidth: 1, borderColor: t.line }]}>
+            <Text style={[ui.primaryText, { color: t.muted }]}>Cancel</Text>
+          </Pressable>
+        )}
+        <Pressable onPress={() => onCall(person)} disabled={onlyDigits(number).length < 3}
+          style={[styles.half, { backgroundColor: onlyDigits(number).length < 3 ? t.line : t.clay }]}>
+          <Text style={[ui.primaryText, { color: t.onClay }]}>Call</Text>
+        </Pressable>
+      </View>
       <Text style={[styles.sub, { color: t.muted }]}>Opens your dialer. When you come back, you can jot down notes from the call.</Text>
     </View>
   );
@@ -735,6 +749,7 @@ export default function Home() {
   const [broken, setBroken] = useState(new Set()); // "<contactId>:<platform>" links reported as not working
   const [notesFor, setNotesFor] = useState(null);  // call that worked → "anything to remember?"
   const [found, setFound] = useState(null);        // {person, tasks} to show in the tasks popup
+  const [dialing, setDialing] = useState(false);   // the "Call a number" card is open
 
   const contacts = useContacts();
   const params = useLocalSearchParams();
@@ -845,7 +860,7 @@ export default function Home() {
       : () => Linking.openURL(m.link.url);
     run({ person: who, platform: m.link.platform, mine: false, screen: inApp }, [open]);
   };
-  const callNumber = (person) => { setQuery(''); run({ person, platform: 'phone', mine: false }, [() => callPhone(person)]); };
+  const callNumber = (person) => { setQuery(''); setDialing(false); run({ person, platform: 'phone', mine: false }, [() => callPhone(person)]); };
   const markAsked = (person, platform) => update((s) => ({ ...s,
     asked: { ...s.asked, [person.id]: { platform, at: new Date().toISOString() } },
     // asking for a FaceTime link means they have an iPhone
@@ -992,9 +1007,14 @@ export default function Home() {
                 );
               })}
             </View>
-            <Pressable onPress={() => setPicking(true)} style={[styles.groupBtn, { borderColor: t.moss }]}>
-              <Text style={[styles.groupText, { color: t.moss }]}>Start a group call</Text>
-            </Pressable>
+            <View style={styles.rowGap}>
+              <Pressable onPress={() => setPicking(true)} style={[styles.groupBtn, styles.flex, { borderColor: t.moss }]}>
+                <Text style={[styles.groupText, { color: t.moss }]}>Start a group call</Text>
+              </Pressable>
+              <Pressable onPress={() => setDialing(true)} style={[styles.groupBtn, styles.flex, { borderColor: t.clay }]}>
+                <Text style={[styles.groupText, { color: t.clay }]}>Call a number</Text>
+              </Pressable>
+            </View>
           </View>}
       <TextInput
         value={query} onChangeText={setQuery} placeholder="Search contacts, or type a number to call" placeholderTextColor={t.muted}
@@ -1005,6 +1025,9 @@ export default function Home() {
           <Text style={[styles.sub, { color: t.muted }]}>Show everyone, including people without video links</Text>
           <Switch value={showAll} onValueChange={setShowAll} trackColor={{ false: t.line, true: t.clay }} />
         </View>
+      )}
+      {!picking && dialing && !looksLikeNumber(query) && (
+        <CallNumber people={contacts.people} t={t} onCall={callNumber} onClose={() => setDialing(false)} />
       )}
       {!picking && looksLikeNumber(query) && <CallNumber key={query} number={query} people={contacts.people} t={t} onCall={callNumber} />}
       {people.map((p) => (
