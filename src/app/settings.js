@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import AiSetup from '../AiSetup';
 import { useContacts } from '../contacts';
+import { notesText, shareNotes } from '../exportNotes';
 import { accountKind, calendarList } from '../meetings';
 import * as Messages from '../messages';
 import { HOSTABLE, SETUP_HELP } from '../myRooms';
@@ -126,6 +127,7 @@ export default function Settings() {
   const t = useTheme();
   const { settings, update } = useSettings();
   const { fix } = useLocalSearchParams();
+  const contacts = useContacts();
   if (!settings) return null;
   const toggle = (k) => (v) => update((s) => ({ ...s, enabled: { ...s.enabled, [k]: v } }));
 
@@ -166,6 +168,14 @@ export default function Settings() {
           keyboardType="email-address" placeholder="Your email, for Email" placeholderTextColor={t.muted}
           style={{ borderWidth: 1, borderColor: t.line, borderRadius: 12, padding: 10, color: t.ink, fontSize: 15 }} />
       </View>
+
+      <Pressable onPress={() => shareNotes(notesText(settings, contacts.people)).catch(() => {})}
+        style={[ui.row, { backgroundColor: t.card, borderColor: t.line, flexDirection: 'column', alignItems: 'stretch', gap: 4 }]}>
+        <Text style={[ui.rowTitle, { color: t.clay }]}>Send all call notes to Claude…</Text>
+        <Text style={[ui.rowNote, { color: t.muted, marginTop: 0 }]}>
+          Notes from every call, open tasks and people notes as one text. Pick the Claude app (or email, Drive…) in the share sheet.
+        </Text>
+      </Pressable>
 
       <Calendars t={t} />
 

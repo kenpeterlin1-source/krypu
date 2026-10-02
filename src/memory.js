@@ -8,7 +8,7 @@ export function recordCall({ person, platform, note, found }) {
     calls: {
       ...s.calls,
       [person.id]: [{
-        id: id(), at: new Date().toISOString(), platform, note,
+        id: id(), at: new Date().toISOString(), name: person.name, platform, note,
         followUps: found.follow_ups.map((text) => ({ text, done: false })),
         facts: found.facts,
       }, ...(s.calls[person.id] ?? [])],

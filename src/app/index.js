@@ -14,6 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
 import { collectNewLinks } from '../messages';
 import { askText, callPhone, inviteText, nudgeText, openRoom, openTheirs, text } from '../launch';
+import { notesText, shareNotes } from '../exportNotes';
 import { useSettings } from '../settings';
 import { useTheme } from '../theme';
 import { guessZone, localTime, useNow, ZONE_CHOICES, zoneName } from '../timezones';
@@ -387,7 +388,7 @@ const NEXT_TIMES = [{ label: '10 am', time: '10:00' }, { label: '1 pm', time: '1
 const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 function AfterCallNotes({ call, t, onDone }) {
-  const { update } = useSettings();
+  const { settings, update } = useSettings();
   const [items, setItems] = useState(() => call.items ?? itemsFromNote(call.note));
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -396,6 +397,7 @@ function AfterCallNotes({ call, t, onDone }) {
   const [day, setDay] = useState(NEXT_DAYS[2]);
   const [time, setTime] = useState(NEXT_TIMES[3]);
   const recorded = useRef(false);
+  const [shareable, setShareable] = useState(false); // a call was saved → offer to send it
   const person = call.person;
   const first = person.name.split(' ')[0];
   const label = PLATFORMS[call.platform]?.label ?? 'call';
@@ -429,6 +431,7 @@ function AfterCallNotes({ call, t, onDone }) {
     }
     const parts = [follow.length && `${follow.length} to follow up`, sched.length && `${sched.length} in your calendar`,
                    notes.length && `${notes.length} added to ${first}'s notes`].filter(Boolean);
+    setShareable(true);
     setKept(parts.length ? `Saved: ${parts.join(' · ')}.` : `Saved to ${first}'s call history.`);
     setItems([]);
   });
@@ -459,6 +462,12 @@ function AfterCallNotes({ call, t, onDone }) {
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.sage }]}>
       <Text style={[styles.name, { color: t.ink }]}>Your call with {person.name}</Text>
       {!!kept && <Text style={[styles.sub, { color: t.sage, fontSize: 15 }]}>{kept}</Text>}
+      {shareable && (
+        <Pressable onPress={() => shareNotes(notesText(settings, [person], { personId: person.id, latest: true })).catch(() => {})}
+          style={[styles.shareBtn, { backgroundColor: t.paper, borderColor: t.sage }]}>
+          <Text style={[styles.sub, { color: t.sage, fontWeight: '700', textAlign: 'center' }]}>Send these notes to Claude…</Text>
+        </Pressable>
+      )}
       {scheduling ? (
         <>
           <Text style={[ui.section, { color: t.muted, marginTop: 0 }]}>Next {label} with {first}</Text>
@@ -644,6 +653,29 @@ function CopiedLink({ copied, people, t, onDone }) {
 }
 
 // Group mode: saved groups ("Family", "Best friends") select their members in one tap; save the current picks as one.
+// Typing a phone number in the search box: call it straight from Krypu (and still get the after-call notes).
+const onlyDigits = (s) => (s ?? '').replace(/\D/g, '');
+export const looksLikeNumber = (q) => /^\+?[\d\s().-]+$/.test(q.trim()) && onlyDigits(q).length >= 7;
+
+function CallNumber({ number, people, t, onCall }) {
+  const [name, setName] = useState('');
+  const known = people.find((p) => p.phone && onlyDigits(p.phone).slice(-10) === onlyDigits(number).slice(-10));
+  const person = known ?? { id: `tel:${onlyDigits(number)}`, name: name.trim() || number.trim(), phone: number.trim(), links: {}, platforms: [] };
+  return (
+    <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.clay }]}>
+      <Text style={[styles.name, { color: t.ink }]}>Call {known ? known.name : number.trim()}</Text>
+      {known
+        ? <Text style={[styles.sub, { color: t.muted }]}>{known.phone} · in your contacts</Text>
+        : <TextInput value={name} onChangeText={setName} placeholder="Who is it? (optional, for your notes)" placeholderTextColor={t.muted}
+            style={[styles.search, { backgroundColor: t.paper, borderColor: t.line, color: t.ink }]} />}
+      <Pressable onPress={() => onCall(person)} style={[ui.primary, { backgroundColor: t.clay }]}>
+        <Text style={[ui.primaryText, { color: t.onClay }]}>Call</Text>
+      </Pressable>
+      <Text style={[styles.sub, { color: t.muted }]}>Opens your dialer. When you come back, you can jot down notes from the call.</Text>
+    </View>
+  );
+}
+
 function SavedGroups({ picked, onPick, t }) {
   const { settings, update } = useSettings();
   const [naming, setNaming] = useState(false);
@@ -749,6 +781,8 @@ export default function Home() {
   // Steps Krypu runs one at a time, each when you come back to it: e.g. text them → open the call.
   // When the queue is empty and you come back, "did it work?" appears.
   const queue = useRef([]);
+  const callRef = useRef(null);
+  useEffect(() => { callRef.current = call; }, [call]);
   const step = async () => {
     const next = queue.current.shift();
     if (!next) return false;
@@ -760,13 +794,19 @@ export default function Home() {
       if (s !== 'active') return;
       checkClipboard();
       collect();
-      if (!(await step())) setCall((c) => c && (c.screen ? null : { ...c, back: true }));
+      if (await step()) return;
+      const c = callRef.current;
+      if (!c) return;
+      // a phone call has no link to check: straight to "anything to remember?"
+      if (c.screen) setCall(null);
+      else if (c.platform === 'phone') { setCall(null); setNotesFor(c); }
+      else setCall({ ...c, back: true });
     });
     return () => sub.remove();
   }, []);
   // run a call: steps as above; the web preview can't open apps, so it goes straight to "did it work?"
   const run = (info, steps) => {
-    if (Platform.OS === 'web') { setCall({ ...info, back: true }); return; }
+    if (Platform.OS === 'web') { if (info.platform === 'phone') setNotesFor(info); else setCall({ ...info, back: true }); return; }
     queue.current = steps; setCall({ ...info, back: false }); step();
   };
 
@@ -805,6 +845,7 @@ export default function Home() {
       : () => Linking.openURL(m.link.url);
     run({ person: who, platform: m.link.platform, mine: false, screen: inApp }, [open]);
   };
+  const callNumber = (person) => { setQuery(''); run({ person, platform: 'phone', mine: false }, [() => callPhone(person)]); };
   const markAsked = (person, platform) => update((s) => ({ ...s,
     asked: { ...s.asked, [person.id]: { platform, at: new Date().toISOString() } },
     // asking for a FaceTime link means they have an iPhone
@@ -956,7 +997,7 @@ export default function Home() {
             </Pressable>
           </View>}
       <TextInput
-        value={query} onChangeText={setQuery} placeholder="Search contacts" placeholderTextColor={t.muted}
+        value={query} onChangeText={setQuery} placeholder="Search contacts, or type a number to call" placeholderTextColor={t.muted}
         style={[styles.search, { backgroundColor: t.card, borderColor: t.line, color: t.ink }]}
       />
       {!picking && (
@@ -965,11 +1006,12 @@ export default function Home() {
           <Switch value={showAll} onValueChange={setShowAll} trackColor={{ false: t.line, true: t.clay }} />
         </View>
       )}
+      {!picking && looksLikeNumber(query) && <CallNumber key={query} number={query} people={contacts.people} t={t} onCall={callNumber} />}
       {people.map((p) => (
         <Person key={p.id} person={p} t={t} picking={picking} picked={group.has(p.id)}
           broken={broken} iphone={settings.iphone[p.id] ?? (p.iphoneHint || settings.asked[p.id]?.platform === 'facetime')} asked={settings.asked[p.id]?.platform === 'facetime'} note={settings.notes[p.id]} zone={zoneFor(p, settings)} now={now} onPress={() => (picking ? toggle(p.id) : setSelected(p))} />
       ))}
-      {people.length === 0 && <Text style={[ui.lede, { color: t.muted }]}>No one matches “{query}”.</Text>}
+      {people.length === 0 && !looksLikeNumber(query) && <Text style={[ui.lede, { color: t.muted }]}>No one matches “{query}”.</Text>}
       <PlatformSheet person={selected} rooms={rooms} t={t} onClose={() => setSelected(null)} onLaunch={launch}
         onAsk={(platform) => ask(selected, platform)}
         onHide={() => { const p = selected; setSelected(null); update((s) => ({ ...s, hidden: { ...s.hidden, [p.id]: p.name } })); }}
@@ -1027,6 +1069,7 @@ const styles = StyleSheet.create({
   timeLine: { marginTop: -4 },
   warn: { padding: 10, borderRadius: 12 },
   half: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center' },
+  shareBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1, alignItems: 'center' },
   scrim: { flex: 1, justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, maxHeight: '88%',
            maxWidth: 560, width: '100%', alignSelf: 'center' },
