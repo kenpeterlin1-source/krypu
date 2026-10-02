@@ -28,6 +28,9 @@ export const DEFAULTS = {
   //   calls: {personId: [{id, at, platform, note, followUps: [{text, done}], facts: [..]}]}  (newest first)
   tasks: [],
   calls: {},
+  // a phone call Krypu started and hasn't taken notes for yet: {person: {id, name, phone}, at} - kept on the phone so
+  // the notes still come up if Android closes Krypu during a long call
+  pendingCall: null,
   // saved groups for group calls: [{id, name, memberIds}]
   groups: [],
   // people you've marked as iPhone users: {contactId: true}
