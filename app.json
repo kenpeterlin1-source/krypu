@@ -22,7 +22,8 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.READ_CALENDAR"
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -54,7 +55,7 @@
       [
         "expo-calendar",
         {
-          "calendarPermission": "Krypu shows your upcoming video meetings so you can join them and take notes."
+          "calendarPermission": "Krypu shows your upcoming video meetings so you can join them and take notes, and deletes an event only when you ask it to."
         }
       ]
     ],

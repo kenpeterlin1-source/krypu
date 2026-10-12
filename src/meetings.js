@@ -38,11 +38,21 @@ export async function calendarList() {
     .map((c) => ({ id: c.id, title: c.title, account: c.source?.name ?? c.ownerAccount ?? 'This phone' }));
 }
 
+// Deletes the event from the phone's calendar; the phone syncs that to Google / Outlook. Only this occurrence of a
+// repeating event. Needs write access (asked the first time).
+export async function deleteEvent(m) {
+  const perm = await Calendar.requestCalendarPermissionsAsync();
+  if (perm.status !== 'granted') throw new Error('Krypu needs permission to change your calendar.');
+  // a repeating event: cancel just this date; a one-off event: delete it
+  await Calendar.deleteEventAsync(m.eventId, m.recurring ? { instanceStartDate: m.start, futureEvents: false } : {});
+}
+
 export function openEvent(m) {
   Calendar.openEventInCalendarAsync({ id: m.eventId, instanceStartDate: m.start }).catch(() => {});
 }
 
-// {status: 'web' | 'ask' | 'denied' | 'ready', meetings: [{id, eventId, title, start, end, calendar, kind, link|null}], ask()}
+// {status: 'web' | 'ask' | 'denied' | 'ready', meetings: [{id, eventId, title, start, end, calendar, kind, link|null}],
+//  loadedAt (ms), ask(), reload()}
 // All-day events (holidays, birthdays) are left out.
 export function useMeetings(hiddenCalendars = {}, accountChoices = {}, hours = 7 * 24) {
   const [state, setState] = useState({ status: Platform.OS === 'web' ? 'web' : 'loading', meetings: [] });
@@ -64,14 +74,14 @@ export function useMeetings(hiddenCalendars = {}, accountChoices = {}, hours = 7
           const c = cals.find((x) => x.id === e.calendarId);
           return { id: `${e.id}-${e.startDate}`, eventId: String(e.id), title: e.title?.trim() || 'Event', start: e.startDate,
                    end: e.endDate, calendar: c?.title, kind: c?.kind ?? 'personal', location: e.location?.trim() || '',
-                   link: meetingLink(e) };
+                   link: meetingLink(e), recurring: !!e.recurrenceRule };
         })
         .filter((m) => new Date(m.end).getTime() > now)
         .sort((a, b) => new Date(a.start) - new Date(b.start));
-      setState({ status: 'ready', meetings });
+      setState({ status: 'ready', meetings, loadedAt: Date.now() });
     } catch (e) {
       console.warn('[meetings] load failed', e?.message ?? e);
-      setState({ status: 'ready', meetings: [] });
+      setState({ status: 'ready', meetings: [], loadedAt: Date.now() });
     }
   }, [choicesKey, hours]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

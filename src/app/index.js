@@ -8,7 +8,7 @@ import { HOSTABLE } from '../myRooms';
 import { calendarUrl, saveTasks, TASK_TARGETS } from '../saveTasks';
 import { addTasks, dueLabel, markAsked, personMemory, recordCall, shortDate, toggleTask } from '../memory';
 import { itemsFromNote, NoteLines, parseWhen } from '../noteLines';
-import { meetingTime, openEvent, useMeetings } from '../meetings';
+import { deleteEvent, meetingTime, openEvent, useMeetings } from '../meetings';
 import { IN_APP, PLATFORMS } from '../platforms';
 import * as Clipboard from 'expo-clipboard';
 import { deleteContact, saveLink, useContacts } from '../contacts';
@@ -158,6 +158,10 @@ function ComingUp({ t, onJoin }) {
   const now = useNow();
   const [more, setMore] = useState(false);
   const cal = useMeetings(settings.hiddenCalendars, settings.calendarAccounts);
+  const [refreshing, setRefreshing] = useState(false);
+  // re-reads the phone's calendars now (Krypu only sees what the phone has synced: if a meeting is missing here,
+  // it's missing in the phone's calendar app too)
+  const refresh = async () => { setRefreshing(true); try { await cal.reload(); } finally { setRefreshing(false); } };
   if (cal.status === 'web' || cal.status === 'loading' || cal.status === 'denied') return null;
   if (cal.status === 'ask') {
     return (
@@ -171,15 +175,36 @@ function ComingUp({ t, onJoin }) {
       </Pressable>
     );
   }
-  const kinds = new Set(cal.meetings.map((m) => m.kind));
+  const hiddenMeetings = settings.hiddenMeetings ?? {};
+  const visible = cal.meetings.filter((m) => !hiddenMeetings[m.id]);
+  const kinds = new Set(visible.map((m) => m.kind));
   const view = kinds.size > 1 ? settings.meetingView ?? 'all' : 'all';
-  const shown = cal.meetings.filter((m) => view === 'all' || m.kind === view);
-  if (!cal.meetings.length) return null;
+  const shown = visible.filter((m) => view === 'all' || m.kind === view);
+  // long-press a meeting: hide it here only, or really delete it from the calendar
+  const manage = (m) => Alert.alert(m.title, meetingTime(m, now), [
+    { text: 'Hide in Krypu', onPress: () => update((s) => {
+      const keep = Object.fromEntries(Object.entries(s.hiddenMeetings ?? {}).filter(([, end]) => end > Date.now()));   // forget finished ones
+      return { ...s, hiddenMeetings: { ...keep, [m.id]: new Date(m.end).getTime() } };
+    }) },
+    { text: 'Delete from calendar', style: 'destructive', onPress: () => Alert.alert('Delete this event?',
+      'It is removed from your calendar on this phone and in Google / Outlook. If someone invited you, the organizer may see it as declined.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: async () => {
+          try { await deleteEvent(m); await cal.reload(); }
+          catch (e) { Alert.alert('Couldn’t delete it', e?.message ?? String(e)); }
+        } },
+      ]) },
+    { text: 'Cancel', style: 'cancel' },
+  ]);
+  if (!visible.length) return null;
   const list = shown.slice(0, more ? 10 : 3);
   return (
     <View style={[styles.rooms, { backgroundColor: t.card, borderColor: t.line }]}>
       <View style={styles.memRow}>
         <Text style={[ui.section, styles.flex, { color: t.muted, marginTop: 0, marginBottom: 0 }]}>Coming up</Text>
+        <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button" accessibilityLabel="Refresh meetings" style={{ paddingHorizontal: 6 }}>
+          {refreshing ? <ActivityIndicator size="small" color={t.sky} /> : <Text style={{ color: t.sky, fontWeight: '700', fontSize: 18 }}>↻</Text>}
+        </Pressable>
         {kinds.size > 1 && (
           <View style={[styles.segment, { borderColor: t.line }]}>
             {VIEWS.map(([key, label]) => (
@@ -194,6 +219,11 @@ function ComingUp({ t, onJoin }) {
       {!list.length && (
         <Text style={[styles.sub, { color: t.muted }]}>Nothing in the next week.</Text>
       )}
+      {!!cal.loadedAt && (
+        <Text style={[styles.sub, { color: t.muted, fontSize: 12 }]}>
+          Updated {new Date(cal.loadedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).toLowerCase()} · from your phone’s calendars
+        </Text>
+      )}
       {list.map((m) => {
         const live = new Date(m.start) <= now;
         const where = m.link ? PLATFORMS[m.link.platform].label : m.location;
@@ -207,13 +237,14 @@ function ComingUp({ t, onJoin }) {
         );
         return m.link ? (
           <View key={m.id} style={styles.memRow}>
-            {row}
+            <Pressable onLongPress={() => manage(m)} style={styles.flex} accessibilityHint="Long-press to hide or delete">{row}</Pressable>
             <Pressable onPress={() => onJoin(m)} style={[styles.joinBtn, { backgroundColor: live ? t.clay : t[PLATFORMS[m.link.platform].tone] }]}>
               <Text style={{ color: t.paper, fontWeight: '700' }}>Join</Text>
             </Pressable>
           </View>
         ) : (
-          <Pressable key={m.id} onPress={() => openEvent(m)} style={styles.memRow} accessibilityLabel={`Open ${m.title} in your calendar`}>
+          <Pressable key={m.id} onPress={() => openEvent(m)} onLongPress={() => manage(m)} style={styles.memRow}
+            accessibilityLabel={`Open ${m.title} in your calendar`} accessibilityHint="Long-press to hide or delete">
             {row}
             <Text style={{ color: t.muted, fontSize: 20 }}>›</Text>
           </Pressable>
